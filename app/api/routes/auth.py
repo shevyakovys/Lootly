@@ -6,7 +6,6 @@ from app.domain.schemas import (
     AdminUserRead,
     BootstrapCreate,
     LoginRequest,
-    OrganizationRead,
     TokenResponse,
 )
 from app.services.auth import (
