@@ -19,6 +19,11 @@ from app.domain.schemas import (
     ServiceRead,
     StaffCreate,
     StaffRead,
+    StaffServiceRead,
+    TimeOffCreate,
+    TimeOffRead,
+    WorkingHoursCreate,
+    WorkingHoursRead,
 )
 from app.services.appointments import (
     AppointmentConflict,
@@ -27,6 +32,7 @@ from app.services.appointments import (
 )
 from app.services.availability import AvailabilityError, AvailabilityService
 from app.services.catalog import CatalogService
+from app.services.schedules import ScheduleService, ScheduleValidationError
 
 router = APIRouter(tags=["booking"])
 
@@ -101,3 +107,52 @@ async def cancel_appointment(appointment_id: uuid.UUID, session: DbSession) -> A
     except LookupError as exc:
         raise HTTPException(status_code=404, detail="appointment not found") from exc
     return AppointmentRead.model_validate(item)
+
+
+@router.post(
+    "/staff/{staff_id}/services/{service_id}",
+    response_model=StaffServiceRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def assign_service(
+    staff_id: uuid.UUID,
+    service_id: uuid.UUID,
+    session: DbSession,
+) -> StaffServiceRead:
+    try:
+        item = await CatalogService(session).assign_service(staff_id, service_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return StaffServiceRead.model_validate(item)
+
+
+@router.post(
+    "/working-hours",
+    response_model=WorkingHoursRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_working_hours(
+    payload: WorkingHoursCreate,
+    session: DbSession,
+) -> WorkingHoursRead:
+    try:
+        item = await ScheduleService(session).create_working_hours(payload)
+    except ScheduleValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return WorkingHoursRead.model_validate(item)
+
+
+@router.post(
+    "/time-off",
+    response_model=TimeOffRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_time_off(
+    payload: TimeOffCreate,
+    session: DbSession,
+) -> TimeOffRead:
+    try:
+        item = await ScheduleService(session).create_time_off(payload)
+    except ScheduleValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return TimeOffRead.model_validate(item)
