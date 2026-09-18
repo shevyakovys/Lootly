@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     environment: str = "development"
     database_url: str = "postgresql+asyncpg://lootly:lootly@postgres:5432/lootly"
     redis_url: str = "redis://redis:6379/0"
+    scheduler_poll_seconds: float = 5.0
+    scheduler_batch_size: int = 100
+    monitor_lock_seconds: int = 180
 
 
 @lru_cache

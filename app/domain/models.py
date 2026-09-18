@@ -53,6 +53,9 @@ class SearchMonitor(Base):
     interval_seconds: Mapped[int] = mapped_column(default=60)
     min_deal_score: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    next_check_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

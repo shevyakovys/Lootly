@@ -1,4 +1,14 @@
 services:
+  migrate:
+    build: .
+    command: alembic upgrade head
+    environment:
+      LOOTLY_DATABASE_URL: postgresql+asyncpg://lootly:lootly@postgres:5432/lootly
+      LOOTLY_REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   api:
     build: .
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
@@ -10,8 +20,36 @@ services:
     volumes:
       - .:/app
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+
+  worker:
+    build: .
+    command: dramatiq app.workers.tasks --processes 1 --threads 4
+    environment:
+      LOOTLY_DATABASE_URL: postgresql+asyncpg://lootly:lootly@postgres:5432/lootly
+      LOOTLY_REDIS_URL: redis://redis:6379/0
+    volumes:
+      - .:/app
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+
+  scheduler:
+    build: .
+    command: python -m app.scheduler
+    environment:
+      LOOTLY_DATABASE_URL: postgresql+asyncpg://lootly:lootly@postgres:5432/lootly
+      LOOTLY_REDIS_URL: redis://redis:6379/0
+    volumes:
+      - .:/app
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_started
 
