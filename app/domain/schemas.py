@@ -3,9 +3,9 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime, time
 from decimal import Decimal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
 class OrganizationCreate(BaseModel):

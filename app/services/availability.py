@@ -101,8 +101,14 @@ class AvailabilityService:
 
             while cursor + duration <= end_utc:
                 candidate_end = cursor + duration
-                if not any(cursor < busy_end and candidate_end > busy_start for busy_start, busy_end in busy):
-                    result.append(AvailabilitySlot(start_at=cursor, end_at=candidate_end))
+                overlaps = any(
+                    cursor < busy_end and candidate_end > busy_start
+                    for busy_start, busy_end in busy
+                )
+                if not overlaps:
+                    result.append(
+                        AvailabilitySlot(start_at=cursor, end_at=candidate_end)
+                    )
                 cursor += step
 
         return result

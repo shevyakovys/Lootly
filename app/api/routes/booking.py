@@ -1,5 +1,6 @@
 import uuid
 from datetime import date
+from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, status
 
@@ -65,8 +66,8 @@ async def availability(
     location_id: uuid.UUID,
     service_id: uuid.UUID,
     staff_id: uuid.UUID,
-    day: date = Query(),
-    session: DbSession = None,  # type: ignore[assignment]
+    session: DbSession,
+    day: Annotated[date, Query()],
 ) -> list[AvailabilitySlot]:
     try:
         return await AvailabilityService(session).slots(

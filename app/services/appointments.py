@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import hashlib
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, timedelta
 
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+from zoneinfo import ZoneInfo
 
 from app.domain.models import (
     Appointment,
@@ -78,7 +79,7 @@ class AppointmentService:
         start_at = payload.start_at.astimezone(UTC)
         end_at = start_at + timedelta(minutes=service.duration_minutes)
 
-        local_day = start_at.astimezone(__import__("zoneinfo").ZoneInfo(location.timezone)).date()
+        local_day = start_at.astimezone(ZoneInfo(location.timezone)).date()
         await self.session.execute(
             text("SELECT pg_advisory_xact_lock(:key)"),
             {"key": _lock_key(payload.staff_id, local_day.isoformat())},
