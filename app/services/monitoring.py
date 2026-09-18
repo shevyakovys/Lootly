@@ -10,6 +10,7 @@ from app.domain.filters import listing_matches_monitor
 from app.domain.models import SearchMonitor
 from app.domain.monitoring import MonitoringRunResult, MonitorQuery
 from app.services.listings import ListingService
+from app.services.monitor_listings import MonitorListingService
 from app.services.search_monitors import SearchMonitorNotFound
 
 
@@ -40,6 +41,7 @@ class MonitoringService:
         listings = await adapter.fetch_listings(query)
         result = MonitoringRunResult(fetched=len(listings))
         listing_service = ListingService(self.session)
+        match_service = MonitorListingService(self.session)
 
         try:
             for item in listings:
@@ -56,6 +58,10 @@ class MonitoringService:
                     result.created += 1
                 else:
                     result.updated += 1
+
+                match = await match_service.link(monitor.id, upsert.listing.id)
+                if match.created:
+                    result.new_matches += 1
 
             await self.session.commit()
         except Exception:

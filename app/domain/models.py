@@ -64,6 +64,10 @@ class SearchMonitor(Base):
     )
 
     user: Mapped[User] = relationship(back_populates="monitors")
+    matches: Mapped[list[MonitorListing]] = relationship(
+        back_populates="monitor",
+        cascade="all, delete-orphan",
+    )
 
 
 class Listing(Base):
@@ -95,6 +99,46 @@ class Listing(Base):
         back_populates="listing",
         cascade="all, delete-orphan",
     )
+    matches: Mapped[list[MonitorListing]] = relationship(
+        back_populates="listing",
+        cascade="all, delete-orphan",
+    )
+
+
+class MonitorListing(Base):
+    __tablename__ = "monitor_listings"
+    __table_args__ = (
+        UniqueConstraint(
+            "monitor_id",
+            "listing_id",
+            name="uq_monitor_listings_monitor_listing",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    monitor_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("search_monitors.id", ondelete="CASCADE"),
+        index=True,
+    )
+    listing_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("listings.id", ondelete="CASCADE"),
+        index=True,
+    )
+    first_matched_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    last_matched_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    monitor: Mapped[SearchMonitor] = relationship(back_populates="matches")
+    listing: Mapped[Listing] = relationship(back_populates="matches")
 
 
 class ListingSnapshot(Base):

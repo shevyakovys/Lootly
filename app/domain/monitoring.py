@@ -53,3 +53,4 @@ class MonitoringRunResult(BaseModel):
     accepted: int = 0
     created: int = 0
     updated: int = 0
+    new_matches: int = 0
