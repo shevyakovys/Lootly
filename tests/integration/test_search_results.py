@@ -49,6 +49,7 @@ async def test_results_are_ordered_and_can_filter_by_score(session: AsyncSession
             query_url="https://example.com/search",
         )
     )
+    await session.flush()
 
     for index, score in enumerate((Decimal("4.00"), Decimal("8.00"))):
         listing_id = uuid.uuid4()
@@ -62,6 +63,7 @@ async def test_results_are_ordered_and_can_filter_by_score(session: AsyncSession
                 url=f"https://example.com/items/{index}",
             )
         )
+        await session.flush()
         session.add(
             MonitorListing(
                 id=uuid.uuid4(),
