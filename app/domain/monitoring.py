@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -45,7 +45,7 @@ class NormalizedListing(BaseModel):
     def require_timezone(cls, value: datetime | None) -> datetime | None:
         if value is not None and value.tzinfo is None:
             raise ValueError("published_at must be timezone-aware")
-        return value
+        return value.astimezone(UTC) if value is not None else None
 
 
 class MonitoringRunResult(BaseModel):
