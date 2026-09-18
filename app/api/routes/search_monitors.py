@@ -1,11 +1,18 @@
 import uuid
+from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, Response, status
 
 from app.api.dependencies import DbSession
-from app.domain.schemas import SearchMonitorCreate, SearchMonitorRead, SearchMonitorUpdate
+from app.domain.schemas import (
+    SearchMonitorCreate,
+    SearchMonitorRead,
+    SearchMonitorUpdate,
+    SearchResultRead,
+)
 from app.services.search_monitors import SearchMonitorNotFound, SearchMonitorService
+from app.services.search_results import SearchResultsService
 
 router = APIRouter(prefix="/search-monitors", tags=["search-monitors"])
 
@@ -53,3 +60,46 @@ async def delete_monitor(monitor_id: uuid.UUID, session: DbSession) -> Response:
     except SearchMonitorNotFound as exc:
         raise HTTPException(status_code=404, detail="Search monitor not found") from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/{monitor_id}/listings", response_model=list[SearchResultRead])
+async def list_monitor_results(
+    monitor_id: uuid.UUID,
+    session: DbSession,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    min_deal_score: Annotated[Decimal | None, Query(ge=0, le=10)] = None,
+) -> list[SearchResultRead]:
+    try:
+        rows = await SearchResultsService(session).list_for_monitor(
+            monitor_id,
+            limit=limit,
+            offset=offset,
+            min_deal_score=min_deal_score,
+        )
+    except SearchMonitorNotFound as exc:
+        raise HTTPException(status_code=404, detail="Search monitor not found") from exc
+
+    return [
+        SearchResultRead(
+            listing_id=row.listing.id,
+            external_id=row.listing.external_id,
+            title=row.listing.title,
+            description=row.listing.description,
+            price=row.listing.price,
+            currency=row.listing.currency,
+            url=row.listing.url,
+            location=row.listing.location,
+            seller_name=row.listing.seller_name,
+            published_at=row.listing.published_at,
+            first_seen_at=row.listing.first_seen_at,
+            matched_at=row.matched_at,
+            market_median=row.statistics.market_median if row.statistics else None,
+            discount_pct=row.statistics.discount_pct if row.statistics else None,
+            deal_score=row.statistics.deal_score if row.statistics else None,
+            sample_size=row.statistics.sample_size if row.statistics else None,
+            confidence=row.statistics.confidence if row.statistics else None,
+            risk_flags=row.statistics.risk_flags if row.statistics else [],
+        )
+        for row in rows
+    ]
