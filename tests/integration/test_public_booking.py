@@ -6,9 +6,20 @@ from decimal import Decimal
 import pytest
 import pytest_asyncio
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
-from app.domain.models import Location, Organization, Service, StaffMember, StaffService, WorkingHours
+from app.domain.models import (
+    Location,
+    Organization,
+    Service,
+    StaffMember,
+    StaffService,
+    WorkingHours,
+)
 from app.domain.schemas import PublicBookingCreate
 from app.services.public_booking import PublicBookingService
 
