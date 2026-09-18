@@ -1,64 +1,28 @@
-# Skill: Testing and Review
+# Skill: Testing & Review
 
-## Purpose
+## QA sequence
 
-Независимо проверить изменение перед признанием задачи завершенной или merge.
+1. Сопоставить diff с требованиями.
+2. Проверить booking invariants.
+3. Проверить time zone handling.
+4. Проверить race conditions и двойное бронирование.
+5. Проверить деньги и snapshots.
+6. Проверить authorization/tenant boundaries.
+7. Проверить миграции.
+8. Проверить негативные сценарии.
+9. Запустить:
+   - ruff check .
+   - mypy app
+   - alembic upgrade head
+   - pytest
+10. Blocking defects: critical/high и любой падающий обязательный gate.
 
-Этот skill выполняется QA Agent из `.agents/qa-agent.md`.
+## Review report
 
-## Review sequence
-
-1. Сопоставить diff с бизнес- и техническими требованиями.
-2. Проверить границы модулей и архитектуру.
-3. Проверить ошибки и edge cases.
-4. Проверить безопасность.
-5. Проверить idempotency и повторную доставку событий.
-6. Проверить наблюдаемость и диагностируемость ошибок.
-7. Проверить достаточность тестов.
-8. Проверить миграции и downgrade.
-9. Проверить backward compatibility.
-10. Проверить документацию.
-
-## Minimum quality gates
-
-Когда соответствующие инструменты доступны:
-- `ruff check .`
-- `mypy app`
-- `pytest`
-- проверка Alembic/migrations;
-- CI workflow.
-
-Если проверка недоступна локально, QA Agent должен использовать CI или явно зафиксировать ограничение.
-
-## Failure loop
-
-Если проверка выявила дефект:
-1. зафиксировать симптом;
-2. определить вероятную причину;
-3. передать конкретное исправление Development Agent;
-4. повторить quality gate.
-
-Для одного блокера максимум 3 полных итерации. После третьей неудачи эскалировать пользователю, приложив:
-- failing check;
-- релевантный лог;
-- три выполненные попытки;
-- текущую гипотезу;
-- что требуется для продолжения.
-
-## Review output
-
-Для найденной проблемы фиксировать:
-- severity: critical/high/medium/low;
+Для дефекта:
+- severity;
 - location;
-- why it matters;
 - evidence;
+- impact;
 - recommended fix;
-- whether it blocks merge.
-
-## Pass criteria
-
-QA PASS допускается только если:
-- critical/high blocking defects отсутствуют;
-- обязательные доступные quality gates проходят;
-- миграции обратимы либо явно документировано исключение;
-- критические ветви новой бизнес-логики протестированы.
+- blocks merge.

@@ -1,154 +1,157 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime, time
 from decimal import Decimal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.core.url_security import UnsafeExternalUrl, ensure_public_http_url
+
+class OrganizationCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    slug: str = Field(pattern=r"^[a-z0-9-]+$", min_length=2, max_length=100)
 
 
-class SearchMonitorBase(BaseModel):
-    source: str = Field(min_length=1, max_length=64)
-    name: str = Field(min_length=1, max_length=160)
-    query_url: str = Field(min_length=1, max_length=4096)
-    min_price: Decimal | None = Field(default=None, ge=0)
-    max_price: Decimal | None = Field(default=None, ge=0)
-    include_keywords: list[str] = Field(default_factory=list)
-    exclude_keywords: list[str] = Field(default_factory=list)
-    region: str | None = Field(default=None, max_length=160)
-    poll_interval_ms: int = Field(default=60_000, ge=500, le=86_400_000)
-    min_deal_score: Decimal | None = Field(default=None, ge=0, le=10)
-    enabled: bool = True
-
-    @field_validator("source")
-    @classmethod
-    def normalize_source(cls, value: str) -> str:
-        return value.strip().lower()
-
-    @field_validator("query_url")
-    @classmethod
-    def validate_query_url(cls, value: str) -> str:
-        try:
-            return ensure_public_http_url(value)
-        except UnsafeExternalUrl as exc:
-            raise ValueError(str(exc)) from exc
-
-    @field_validator("include_keywords", "exclude_keywords")
-    @classmethod
-    def normalize_keywords(cls, value: list[str]) -> list[str]:
-        cleaned = [keyword.strip() for keyword in value if keyword.strip()]
-        return list(dict.fromkeys(cleaned))
-
-    @model_validator(mode="after")
-    def validate_price_range(self) -> SearchMonitorBase:
-        if (
-            self.min_price is not None
-            and self.max_price is not None
-            and self.min_price > self.max_price
-        ):
-            raise ValueError("min_price must not exceed max_price")
-        return self
-
-
-class SearchMonitorCreate(SearchMonitorBase):
-    user_id: uuid.UUID
-
-
-class SearchMonitorUpdate(BaseModel):
-    name: str | None = Field(default=None, min_length=1, max_length=160)
-    query_url: str | None = Field(default=None, min_length=1, max_length=4096)
-    min_price: Decimal | None = Field(default=None, ge=0)
-    max_price: Decimal | None = Field(default=None, ge=0)
-    include_keywords: list[str] | None = None
-    exclude_keywords: list[str] | None = None
-    region: str | None = Field(default=None, max_length=160)
-    poll_interval_ms: int | None = Field(default=None, ge=500, le=86_400_000)
-    min_deal_score: Decimal | None = Field(default=None, ge=0, le=10)
-    enabled: bool | None = None
-
-    @field_validator("query_url")
-    @classmethod
-    def validate_query_url(cls, value: str | None) -> str | None:
-        if value is None:
-            return value
-        try:
-            return ensure_public_http_url(value)
-        except UnsafeExternalUrl as exc:
-            raise ValueError(str(exc)) from exc
-
-    @field_validator("include_keywords", "exclude_keywords")
-    @classmethod
-    def normalize_keywords(cls, value: list[str] | None) -> list[str] | None:
-        if value is None:
-            return None
-        cleaned = [keyword.strip() for keyword in value if keyword.strip()]
-        return list(dict.fromkeys(cleaned))
-
-
-class SearchMonitorRead(SearchMonitorBase):
+class OrganizationRead(OrganizationCreate):
     model_config = ConfigDict(from_attributes=True)
-
     id: uuid.UUID
-    user_id: uuid.UUID
-    created_at: datetime
-    updated_at: datetime
-
-
-class UserCreate(BaseModel):
-    email: str | None = Field(default=None, min_length=3, max_length=320)
-    telegram_id: str | None = Field(default=None, min_length=1, max_length=64)
-
-    @model_validator(mode="after")
-    def require_identity(self) -> UserCreate:
-        if self.email is None and self.telegram_id is None:
-            raise ValueError("email or telegram_id is required")
-        return self
-
-
-class UserRead(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: uuid.UUID
-    email: str | None
-    telegram_id: str | None
     created_at: datetime
 
 
-class SearchResultRead(BaseModel):
-    listing_id: uuid.UUID
-    external_id: str
-    title: str
-    description: str | None
+class LocationCreate(BaseModel):
+    organization_id: uuid.UUID
+    name: str = Field(min_length=1, max_length=200)
+    timezone: str = "Europe/Moscow"
+    address: str | None = None
+
+    @field_validator("timezone")
+    @classmethod
+    def valid_timezone(cls, value: str) -> str:
+        try:
+            ZoneInfo(value)
+        except ZoneInfoNotFoundError as exc:
+            raise ValueError("unknown IANA timezone") from exc
+        return value
+
+
+class LocationRead(LocationCreate):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    active: bool
+
+
+class StaffCreate(BaseModel):
+    organization_id: uuid.UUID
+    location_id: uuid.UUID
+    name: str = Field(min_length=1, max_length=200)
+
+
+class StaffRead(StaffCreate):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    active: bool
+
+
+class ServiceCreate(BaseModel):
+    organization_id: uuid.UUID
+    name: str = Field(min_length=1, max_length=200)
+    duration_minutes: int = Field(gt=0, le=1440)
+    price: Decimal = Field(ge=0)
+
+
+class ServiceRead(ServiceCreate):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    active: bool
+
+
+class CustomerCreate(BaseModel):
+    organization_id: uuid.UUID
+    name: str = Field(min_length=1, max_length=200)
+    phone: str = Field(min_length=3, max_length=50)
+    email: str | None = Field(default=None, max_length=320)
+    note: str | None = None
+
+
+class CustomerRead(CustomerCreate):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    created_at: datetime
+
+
+class WorkingHoursCreate(BaseModel):
+    staff_id: uuid.UUID
+    weekday: int = Field(ge=0, le=6)
+    start_time: time
+    end_time: time
+
+    @model_validator(mode="after")
+    def valid_interval(self) -> WorkingHoursCreate:
+        if self.end_time <= self.start_time:
+            raise ValueError("end_time must be after start_time")
+        return self
+
+
+class TimeOffCreate(BaseModel):
+    staff_id: uuid.UUID
+    start_at: datetime
+    end_at: datetime
+    reason: str | None = Field(default=None, max_length=255)
+
+    @model_validator(mode="after")
+    def valid_interval(self) -> TimeOffCreate:
+        if self.start_at.tzinfo is None or self.end_at.tzinfo is None:
+            raise ValueError("time off timestamps must be timezone-aware")
+        if self.end_at <= self.start_at:
+            raise ValueError("end_at must be after start_at")
+        return self
+
+
+class AvailabilityQuery(BaseModel):
+    location_id: uuid.UUID
+    service_id: uuid.UUID
+    staff_id: uuid.UUID
+    day: date
+
+
+class AvailabilitySlot(BaseModel):
+    start_at: datetime
+    end_at: datetime
+
+
+class AppointmentCreate(BaseModel):
+    organization_id: uuid.UUID
+    location_id: uuid.UUID
+    staff_id: uuid.UUID
+    service_id: uuid.UUID
+    customer_id: uuid.UUID
+    start_at: datetime
+    note: str | None = None
+    booking_key: str | None = Field(default=None, max_length=100)
+
+    @field_validator("start_at")
+    @classmethod
+    def timezone_required(cls, value: datetime) -> datetime:
+        if value.tzinfo is None:
+            raise ValueError("start_at must be timezone-aware")
+        return value
+
+
+class AppointmentRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    organization_id: uuid.UUID
+    location_id: uuid.UUID
+    staff_id: uuid.UUID
+    service_id: uuid.UUID
+    customer_id: uuid.UUID
+    start_at: datetime
+    end_at: datetime
+    duration_minutes: int
     price: Decimal
-    currency: str
-    url: str
-    location: str | None
-    seller_name: str | None
-    published_at: datetime | None
-    first_seen_at: datetime
-    matched_at: datetime
-    market_median: Decimal | None = None
-    discount_pct: Decimal | None = None
-    deal_score: Decimal | None = None
-    sample_size: int | None = None
-    confidence: Decimal | None = None
-    risk_flags: list[str] = Field(default_factory=list)
-
-
-class MonitoringRunRead(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: uuid.UUID
-    monitor_id: uuid.UUID
     status: str
-    started_at: datetime
-    finished_at: datetime
-    duration_ms: int
-    fetched: int
-    accepted: int
-    created: int
-    updated: int
-    new_matches: int
-    error_type: str | None
+    note: str | None
+    booking_key: str | None
+    created_at: datetime

@@ -1,252 +1,168 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import datetime, time
 from decimal import Decimal
-from typing import Any
 
 from sqlalchemy import (
-    JSON,
     Boolean,
     DateTime,
     ForeignKey,
+    Integer,
     Numeric,
     String,
     Text,
+    Time,
     UniqueConstraint,
     func,
 )
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
 
 
-class User(Base):
-    __tablename__ = "users"
+class Organization(Base):
+    __tablename__ = "organizations"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    email: Mapped[str | None] = mapped_column(String(320), unique=True, nullable=True)
-    telegram_id: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
+    name: Mapped[str] = mapped_column(String(200))
+    slug: Mapped[str] = mapped_column(String(100), unique=True, index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
-    monitors: Mapped[list[SearchMonitor]] = relationship(back_populates="user")
 
-
-class SearchMonitor(Base):
-    __tablename__ = "search_monitors"
+class Location(Base):
+    __tablename__ = "locations"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), index=True
     )
-    source: Mapped[str] = mapped_column(String(64), index=True)
-    name: Mapped[str] = mapped_column(String(160))
-    query_url: Mapped[str] = mapped_column(Text)
-    min_price: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
-    max_price: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
-    include_keywords: Mapped[list[str]] = mapped_column(JSON, default=list)
-    exclude_keywords: Mapped[list[str]] = mapped_column(JSON, default=list)
-    region: Mapped[str | None] = mapped_column(String(160), nullable=True)
-    poll_interval_ms: Mapped[int] = mapped_column(default=60_000)
-    min_deal_score: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
-    enabled: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
-    next_check_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
-    )
-
-    user: Mapped[User] = relationship(back_populates="monitors")
-    matches: Mapped[list[MonitorListing]] = relationship(
-        back_populates="monitor",
-        cascade="all, delete-orphan",
-    )
+    name: Mapped[str] = mapped_column(String(200))
+    timezone: Mapped[str] = mapped_column(String(100), default="Europe/Moscow")
+    address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
-class Listing(Base):
-    __tablename__ = "listings"
-    __table_args__ = (
-        UniqueConstraint("source", "external_id", name="uq_listings_source_external_id"),
-    )
+class StaffMember(Base):
+    __tablename__ = "staff_members"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    source: Mapped[str] = mapped_column(String(64), index=True)
-    external_id: Mapped[str] = mapped_column(String(255))
-    title: Mapped[str] = mapped_column(String(512))
-    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
+    location_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("locations.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(200))
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class Service(Base):
+    __tablename__ = "services"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(200))
+    duration_minutes: Mapped[int] = mapped_column(Integer)
     price: Mapped[Decimal] = mapped_column(Numeric(18, 2))
-    currency: Mapped[str] = mapped_column(String(8), default="RUB")
-    url: Mapped[str] = mapped_column(Text)
-    location: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    seller_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    first_seen_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
-    last_seen_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
-    raw_payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
-
-    snapshots: Mapped[list[ListingSnapshot]] = relationship(
-        back_populates="listing",
-        cascade="all, delete-orphan",
-    )
-    matches: Mapped[list[MonitorListing]] = relationship(
-        back_populates="listing",
-        cascade="all, delete-orphan",
-    )
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
-class MonitorListing(Base):
-    __tablename__ = "monitor_listings"
+class StaffService(Base):
+    __tablename__ = "staff_services"
     __table_args__ = (
-        UniqueConstraint(
-            "monitor_id",
-            "listing_id",
-            name="uq_monitor_listings_monitor_listing",
-        ),
+        UniqueConstraint("staff_id", "service_id", name="uq_staff_services_staff_service"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    monitor_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("search_monitors.id", ondelete="CASCADE"),
-        index=True,
+    staff_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("staff_members.id", ondelete="CASCADE"), index=True
     )
-    listing_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("listings.id", ondelete="CASCADE"),
-        index=True,
-    )
-    first_matched_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
-    )
-    last_matched_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
+    service_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("services.id", ondelete="CASCADE"), index=True
     )
 
-    monitor: Mapped[SearchMonitor] = relationship(back_populates="matches")
-    listing: Mapped[Listing] = relationship(back_populates="matches")
 
-
-class ListingSnapshot(Base):
-    __tablename__ = "listing_snapshots"
-
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    listing_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("listings.id", ondelete="CASCADE"), index=True
-    )
-    price: Mapped[Decimal] = mapped_column(Numeric(18, 2))
-    observed_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
-
-    listing: Mapped[Listing] = relationship(back_populates="snapshots")
-
-
-class PriceStatistic(Base):
-    __tablename__ = "price_statistics"
+class Customer(Base):
+    __tablename__ = "customers"
     __table_args__ = (
-        UniqueConstraint(
-            "monitor_id",
-            "listing_id",
-            name="uq_price_statistics_monitor_listing",
-        ),
+        UniqueConstraint("organization_id", "phone", name="uq_customers_org_phone"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    monitor_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("search_monitors.id", ondelete="CASCADE"),
-        index=True,
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), index=True
     )
-    listing_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("listings.id", ondelete="CASCADE"),
-        index=True,
-    )
-    market_median: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
-    discount_pct: Mapped[Decimal | None] = mapped_column(Numeric(8, 2), nullable=True)
-    deal_score: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
-    sample_size: Mapped[int] = mapped_column(nullable=False)
-    confidence: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False)
-    risk_flags: Mapped[list[str]] = mapped_column(JSON, default=list)
-    calculated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
-    )
-
-
-class Notification(Base):
-    __tablename__ = "notifications"
-    __table_args__ = (
-        UniqueConstraint(
-            "monitor_id",
-            "listing_id",
-            "channel",
-            name="uq_notifications_monitor_listing_channel",
-        ),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="CASCADE"),
-        index=True,
-    )
-    monitor_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("search_monitors.id", ondelete="CASCADE"),
-        index=True,
-    )
-    listing_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("listings.id", ondelete="CASCADE"),
-        index=True,
-    )
-    channel: Mapped[str] = mapped_column(String(32), default="telegram")
-    chat_id: Mapped[str] = mapped_column(String(128))
-    message_text: Mapped[str] = mapped_column(Text)
-    status: Mapped[str] = mapped_column(String(32), default="pending", index=True)
-    attempt_count: Mapped[int] = mapped_column(default=0)
-    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    name: Mapped[str] = mapped_column(String(200))
+    phone: Mapped[str] = mapped_column(String(50))
+    email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
-class MonitoringRun(Base):
-    __tablename__ = "monitoring_runs"
+class WorkingHours(Base):
+    __tablename__ = "working_hours"
+    __table_args__ = (
+        UniqueConstraint(
+            "staff_id", "weekday", "start_time", "end_time",
+            name="uq_working_hours_interval",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    monitor_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("search_monitors.id", ondelete="CASCADE"),
-        index=True,
+    staff_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("staff_members.id", ondelete="CASCADE"), index=True
     )
-    status: Mapped[str] = mapped_column(String(32), index=True)
-    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    finished_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    duration_ms: Mapped[int] = mapped_column(nullable=False)
-    fetched: Mapped[int] = mapped_column(default=0)
-    accepted: Mapped[int] = mapped_column(default=0)
-    created: Mapped[int] = mapped_column(default=0)
-    updated: Mapped[int] = mapped_column(default=0)
-    new_matches: Mapped[int] = mapped_column(default=0)
-    error_type: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    weekday: Mapped[int] = mapped_column(Integer)
+    start_time: Mapped[time] = mapped_column(Time)
+    end_time: Mapped[time] = mapped_column(Time)
+
+
+class TimeOff(Base):
+    __tablename__ = "time_off"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    staff_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("staff_members.id", ondelete="CASCADE"), index=True
+    )
+    start_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    end_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+
+class Appointment(Base):
+    __tablename__ = "appointments"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
+    location_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("locations.id", ondelete="CASCADE"), index=True
+    )
+    staff_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("staff_members.id", ondelete="RESTRICT"), index=True
+    )
+    service_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("services.id", ondelete="RESTRICT"), index=True
+    )
+    customer_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("customers.id", ondelete="RESTRICT"), index=True
+    )
+    start_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    end_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    duration_minutes: Mapped[int] = mapped_column(Integer)
+    price: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    status: Mapped[str] = mapped_column(String(32), default="booked", index=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    booking_key: Mapped[str | None] = mapped_column(String(100), unique=True, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )

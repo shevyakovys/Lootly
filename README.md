@@ -1,51 +1,37 @@
 # Lootly
 
-Lootly is a real-time marketplace monitoring and deal discovery service.
+Lootly — SaaS-платформа онлайн-бронирования для бизнеса в сфере услуг.
 
-## Current development stage
+Текущая продуктовая концепция: онлайн-запись клиентов, сотрудники, услуги, филиалы, расписания, свободные слоты и журнал визитов.
 
-The backend foundation now provides:
+## MVP foundation
 
-- FastAPI application;
-- PostgreSQL persistence with SQLAlchemy 2.x;
-- Alembic migrations;
-- Redis;
-- User and SearchMonitor APIs;
-- marketplace adapter contract and registry;
-- normalized Listing model;
-- idempotent listing upsert by `source + external_id`;
-- price-history snapshots;
-- core monitor filters;
-- Dramatiq Redis worker with async actor support;
-- scheduler service driven by `next_check_at`;
-- per-monitor Redis execution locks;
-- URL/SSRF input hardening;
-- Docker Compose for API, migrations, worker, scheduler, PostgreSQL and Redis;
-- CI with PostgreSQL integration tests.
-
-No concrete marketplace adapter is enabled yet. Source-specific integrations are intentionally isolated behind the adapter contract.
+- FastAPI;
+- PostgreSQL + SQLAlchemy;
+- Alembic;
+- organizations / locations;
+- staff / services;
+- customers;
+- working hours / time off;
+- availability calculation;
+- appointments with overlap protection;
+- Docker Compose;
+- GitHub Actions.
 
 ## Local development
 
 ```bash
 cp .env.example .env
-docker compose up
-```
-
-The compose stack applies migrations before starting API, worker and scheduler.
-
-API documentation is available at `http://localhost:8000/docs`.
-
-Run checks outside Docker:
-
-```bash
+docker compose up -d postgres
 python -m venv .venv
 source .venv/bin/activate
 pip install -e '.[dev]'
 alembic upgrade head
-ruff check .
-mypy app
-pytest
+uvicorn app.main:app --reload
 ```
 
-See `AGENTS.md` for the required AI-development workflow and `docs/` for product and architecture requirements.
+Docs:
+- `docs/BUSINESS_REQUIREMENTS.md`
+- `docs/TECHNICAL_REQUIREMENTS.md`
+- `docs/ARCHITECTURE.md`
+- `AGENTS.md`

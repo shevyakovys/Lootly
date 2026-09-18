@@ -1,46 +1,28 @@
-# Agent and Skill Routing
+# Skill Routing
 
-Полные правила находятся в корневом `AGENTS.md`.
+## Booking domain
 
-## Agents
+Используй `.agents/skills/booking-domain/SKILL.md` для:
+- клиентов;
+- услуг;
+- сотрудников;
+- филиалов;
+- записей;
+- статусов визита;
+- CRUD доменных сущностей.
 
-### Development Agent
-Используй `.agents/lootly-agent.md` для проектирования и реализации любой инженерной задачи.
+## Availability & scheduling
 
-### QA Agent
-Используй `.agents/qa-agent.md` после каждого существенного изменения кода, схемы БД, инфраструктуры или публичного API.
+Используй `.agents/skills/availability-scheduling/SKILL.md` для:
+- рабочих часов;
+- свободных слотов;
+- длительности услуги;
+- пересечений;
+- отпусков/перерывов;
+- time zones;
+- ресурсов;
+- concurrency при бронировании.
 
-QA Agent выполняется как отдельная стадия после Development Agent и может вернуть задачу на исправление.
+## Testing & review
 
-## Marketplace monitoring
-
-Используй `.agents/skills/marketplace-monitoring/SKILL.md`, если задача содержит:
-- marketplace/source adapter;
-- получение объявлений;
-- polling/scheduler;
-- очереди проверок;
-- нормализацию listing;
-- фильтры;
-- дедупликацию;
-- source rate limits;
-- обработку ошибок источника.
-
-## Deal scoring
-
-Используй `.agents/skills/deal-scoring/SKILL.md`, если задача содержит:
-- market price;
-- price history;
-- comparable listings;
-- median;
-- discount;
-- Deal Score;
-- Risk Score;
-- confidence.
-
-## Testing and review
-
-QA Agent обязан использовать `.agents/skills/testing-and-review/SKILL.md`.
-
-## Multiple skills
-
-Skills не взаимоисключающие. Любая кодовая задача завершается QA Agent + testing-and-review независимо от остальных skills.
+Используй `.agents/skills/testing-and-review/SKILL.md` перед завершением любой кодовой задачи.
