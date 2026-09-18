@@ -1,10 +1,6 @@
-# Технические требования Lootly
+# Технические требования Lootly Booking Platform
 
-## 1. Общие требования
-
-Система должна быть модульной, наблюдаемой и пригодной к горизонтальному масштабированию. Архитектура не должна быть жестко связана с одним источником объявлений.
-
-## 2. Рекомендуемый стек
+## Stack
 
 Backend:
 - Python 3.12+
@@ -13,162 +9,113 @@ Backend:
 - SQLAlchemy 2.x
 - Alembic
 
-Хранилища и очереди:
+Storage:
 - PostgreSQL
-- Redis
 
-Фоновые задачи:
-- Celery, Dramatiq или ARQ
+Async/background later:
+- Redis
+- task queue for reminders and integrations
 
 Frontend:
-- Next.js
-- TypeScript
-- Tailwind CSS
+- Next.js + TypeScript + Tailwind
 
-Инфраструктура:
+Infrastructure:
 - Docker
-- Docker Compose для локальной разработки
-- Nginx или managed ingress в production
-- CI/CD через GitHub Actions
+- Docker Compose
+- GitHub Actions
 
-## 3. Основные сервисы
+## Core modules
 
-### API Service
-Отвечает за:
-- пользователей;
-- мониторинги;
-- настройки;
-- списки объявлений;
-- статистику;
-- административные операции.
+- organizations
+- locations
+- staff
+- services
+- customers
+- schedules
+- availability
+- appointments
+- notifications
+- auth
 
-### Scheduler
-Планирует проверки активных мониторингов.
+## Persistence rules
 
-### Worker
-Получает задания, обращается к источникам, нормализует данные, выполняет фильтры, рассчитывает оценку и создает события уведомлений.
+- UUID primary keys;
+- timestamps timezone-aware;
+- UTC in DB;
+- IANA timezone on Location;
+- monetary values Numeric/Decimal;
+- appointment snapshots for price and duration;
+- soft/domain cancellation instead of deletion of visits.
 
-### Notification Service
-Отправляет сообщения в Telegram и в будущем другие каналы.
+## Availability
 
-### Pricing Service
-Вычисляет типичную цену, скидку к рынку и дополнительные аналитические показатели.
+Availability calculation must consider:
+- working hours by weekday;
+- time off exceptions;
+- existing non-canceled appointments;
+- service duration;
+- service/staff relation;
+- location timezone.
 
-## 4. Модель данных
+Default slot step for MVP: 15 minutes.
 
-Минимальные сущности:
-- User
-- SearchMonitor
-- DataSource
-- Listing
-- ListingSnapshot
-- Notification
-- PriceStatistic
-- AuditEvent
+## Double-booking protection
 
-### SearchMonitor
-Поля:
-- id
-- user_id
-- source
-- name
-- query_url
-- min_price
-- max_price
-- include_keywords
-- exclude_keywords
-- region
-- interval_seconds
-- min_deal_score
-- enabled
-- created_at
-- updated_at
+Availability response alone is not sufficient.
 
-### Listing
-Поля:
-- id
-- source
-- external_id
-- title
-- description
-- price
-- currency
-- url
-- location
-- seller_name
-- published_at
-- first_seen_at
-- last_seen_at
-- raw_payload
+Appointment creation must:
+1. start transaction;
+2. acquire deterministic PostgreSQL advisory lock for staff + local service date;
+3. reload conflicts;
+4. reject overlap;
+5. insert appointment;
+6. commit.
 
-Уникальный ключ должен включать source + external_id.
+## API requirements
 
-## 5. Функциональные требования
+Version prefix: `/api/v1`.
 
-Система должна:
-- выполнять проверки по расписанию;
-- предотвращать одновременный запуск одной и той же проверки;
-- иметь идемпотентную обработку объявления;
-- поддерживать повторные попытки при временных ошибках;
-- ограничивать частоту запросов к внешним источникам;
-- сохранять исходные данные в диагностических целях;
-- логировать ошибки интеграций;
-- не отправлять одно и то же уведомление повторно без явной причины.
+MVP endpoints:
+- organizations;
+- locations;
+- staff;
+- services;
+- customers;
+- working-hours;
+- time-off;
+- availability;
+- appointments.
 
-## 6. Производительность
+## Performance goals
 
-Для MVP:
-- API p95 < 500 мс для обычных CRUD-запросов;
-- постановка фоновой задачи < 1 секунды;
-- scheduler должен поддерживать разрешенные источники с интервалом мониторинга от 500 мс;
-- обработка нового объявления без внешней задержки < 3 секунд;
-- поддержка не менее 1 000 активных мониторингов на одной небольшой production-конфигурации при разумном интервале опроса.
+- CRUD API p95 < 500 ms;
+- availability p95 < 750 ms for one staff/day;
+- booking creation p95 < 750 ms excluding external notifications;
+- no duplicate active appointments for same staff/time under concurrency.
 
-## 7. Надежность
+## Security
 
-Требуется:
-- retries с exponential backoff;
-- dead-letter подход или отдельная очередь ошибок;
-- health checks;
-- readiness/liveness endpoints;
-- централизованные логи;
-- метрики worker throughput, error rate, notification latency;
-- защита от повторной обработки одного события.
+- tenant isolation on every organization-owned entity;
+- authentication before admin API;
+- public booking endpoints expose only necessary fields;
+- rate limiting public booking;
+- phone/email treated as personal data;
+- structured logs without unnecessary PII;
+- secrets via environment/secrets manager.
 
-## 8. Безопасность
+## Testing
 
-Обязательно:
-- секреты только через environment/secrets manager;
-- пароли только как стойкие хэши;
-- JWT или защищенные server-side sessions;
-- rate limiting API;
-- валидация входных URL;
-- запрет SSRF;
-- минимальные права сервисных учетных записей;
-- отсутствие секретов в логах;
-- аудит критичных действий.
+- domain unit tests;
+- integration tests with PostgreSQL;
+- overlap/concurrency tests;
+- timezone/DST tests;
+- migration smoke tests;
+- API tests.
 
-## 9. Тестирование
+## CI
 
-Минимальный набор:
-- unit tests для фильтров и deal score;
-- integration tests для БД;
-- contract tests для adapters источников;
-- tests для дедупликации;
-- tests для Telegram formatter;
-- API tests;
-- smoke test Docker Compose окружения.
-
-## 10. CI/CD
-
-Pipeline должен выполнять:
-- lint;
-- type checks;
-- tests;
-- security checks зависимостей;
-- сборку Docker image;
-- публикацию image только после успешных тестов.
-
-## 11. Совместимость источников
-
-Интеграция с каждым источником реализуется через adapter interface. Бизнес-логика не должна напрямую зависеть от HTML, endpoint-структуры или формата конкретной площадки.
+Required:
+- ruff;
+- mypy;
+- alembic upgrade head;
+- pytest.

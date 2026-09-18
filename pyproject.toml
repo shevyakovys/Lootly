@@ -4,18 +4,15 @@ build-backend = "hatchling.build"
 
 [project]
 name = "lootly"
-version = "0.1.0"
-description = "Real-time marketplace monitoring and deal discovery service"
+version = "0.2.0"
+description = "Online booking platform for service businesses"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
   "alembic>=1.16,<2",
   "asyncpg>=0.30,<1",
-  "dramatiq[redis]>=2.2.1,<3",
   "fastapi>=0.116,<1",
-  "httpx>=0.28,<1",
   "pydantic-settings>=2.10,<3",
-  "redis>=6.4,<7",
   "sqlalchemy[asyncio]>=2.0.43,<3",
   "structlog>=25.4,<26",
   "uvicorn[standard]>=0.35,<1",
@@ -23,6 +20,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+  "httpx>=0.28,<1",
   "mypy>=1.17,<2",
   "pytest>=8.4,<9",
   "pytest-asyncio>=1.1,<2",
