@@ -1,4 +1,5 @@
 import uuid
+from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, Response, status
 
@@ -17,7 +18,7 @@ async def create_monitor(payload: SearchMonitorCreate, session: DbSession) -> Se
 
 @router.get("", response_model=list[SearchMonitorRead])
 async def list_monitors(
-    session: DbSession, user_id: uuid.UUID | None = Query(default=None)
+    session: DbSession, user_id: Annotated[uuid.UUID | None, Query()] = None
 ) -> list[SearchMonitorRead]:
     monitors = await SearchMonitorService(session).list(user_id=user_id)
     return [SearchMonitorRead.model_validate(monitor) for monitor in monitors]
