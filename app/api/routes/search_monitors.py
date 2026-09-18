@@ -6,11 +6,11 @@ from fastapi import APIRouter, HTTPException, Query, Response, status
 
 from app.api.dependencies import DbSession
 from app.domain.schemas import (
+    MonitoringRunRead,
     SearchMonitorCreate,
     SearchMonitorRead,
     SearchMonitorUpdate,
     SearchResultRead,
-    MonitoringRunRead,
 )
 from app.services.monitor_runs import MonitoringRunService
 from app.services.search_monitors import SearchMonitorNotFound, SearchMonitorService
