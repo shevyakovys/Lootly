@@ -10,7 +10,9 @@ from app.domain.schemas import (
     SearchMonitorRead,
     SearchMonitorUpdate,
     SearchResultRead,
+    MonitoringRunRead,
 )
+from app.services.monitor_runs import MonitoringRunService
 from app.services.search_monitors import SearchMonitorNotFound, SearchMonitorService
 from app.services.search_results import SearchResultsService
 
@@ -103,3 +105,19 @@ async def list_monitor_results(
         )
         for row in rows
     ]
+
+
+@router.get("/{monitor_id}/runs", response_model=list[MonitoringRunRead])
+async def list_monitor_runs(
+    monitor_id: uuid.UUID,
+    session: DbSession,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> list[MonitoringRunRead]:
+    try:
+        runs = await MonitoringRunService(session).list_for_monitor(
+            monitor_id,
+            limit=limit,
+        )
+    except SearchMonitorNotFound as exc:
+        raise HTTPException(status_code=404, detail="Search monitor not found") from exc
+    return [MonitoringRunRead.model_validate(run) for run in runs]

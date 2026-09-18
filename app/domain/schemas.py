@@ -135,3 +135,20 @@ class SearchResultRead(BaseModel):
     sample_size: int | None = None
     confidence: Decimal | None = None
     risk_flags: list[str] = Field(default_factory=list)
+
+
+class MonitoringRunRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    monitor_id: uuid.UUID
+    status: str
+    started_at: datetime
+    finished_at: datetime
+    duration_ms: int
+    fetched: int
+    accepted: int
+    created: int
+    updated: int
+    new_matches: int
+    error_type: str | None
