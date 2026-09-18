@@ -42,6 +42,8 @@ async def _run_monitor_check(monitor_id: str) -> None:
                     registry=build_adapter_registry(),
                 ).run(parsed_id)
                 pending_ids = await NotificationService(session).pending_ids_for_monitor(parsed_id)
+        except SearchMonitorNotFound:
+            raise
         except Exception as exc:
             finished_at = datetime.now(UTC)
             async with get_session_factory()() as telemetry_session:
