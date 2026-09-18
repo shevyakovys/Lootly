@@ -121,6 +121,7 @@ class AvailabilityService:
         staff_id: uuid.UUID,
         start_at: datetime,
         end_at: datetime,
+        exclude_appointment_id: uuid.UUID | None = None,
     ) -> bool:
         location = await self.session.get(Location, location_id)
         service = await self.session.get(Service, service_id)
@@ -175,12 +176,15 @@ class AvailabilityService:
         if blocked is not None:
             return False
 
-        conflict = await self.session.scalar(
-            select(Appointment.id).where(
-                Appointment.staff_id == staff_id,
-                Appointment.status.in_(BLOCKING_STATUSES),
-                Appointment.start_at < end_utc,
-                Appointment.end_at > start_utc,
-            )
+        conflict_query = select(Appointment.id).where(
+            Appointment.staff_id == staff_id,
+            Appointment.status.in_(BLOCKING_STATUSES),
+            Appointment.start_at < end_utc,
+            Appointment.end_at > start_utc,
         )
+        if exclude_appointment_id is not None:
+            conflict_query = conflict_query.where(
+                Appointment.id != exclude_appointment_id
+            )
+        conflict = await self.session.scalar(conflict_query)
         return conflict is None
