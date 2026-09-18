@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     scheduler_poll_seconds: float = 5.0
     scheduler_batch_size: int = 100
     monitor_lock_seconds: int = 180
+    telegram_bot_token: str | None = None
+    telegram_timeout_seconds: float = 10.0
 
 
 @lru_cache

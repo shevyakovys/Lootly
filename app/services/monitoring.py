@@ -11,6 +11,7 @@ from app.domain.models import SearchMonitor
 from app.domain.monitoring import MonitoringRunResult, MonitorQuery
 from app.services.listings import ListingService
 from app.services.monitor_listings import MonitorListingService
+from app.services.notifications import NotificationService
 from app.services.pricing import PricingService
 from app.services.search_monitors import SearchMonitorNotFound
 
@@ -44,6 +45,7 @@ class MonitoringService:
         listing_service = ListingService(self.session)
         match_service = MonitorListingService(self.session)
         pricing_service = PricingService(self.session)
+        notification_service = NotificationService(self.session)
 
         try:
             for item in listings:
@@ -64,7 +66,12 @@ class MonitoringService:
                 match = await match_service.link(monitor.id, upsert.listing.id)
                 if match.created:
                     result.new_matches += 1
-                    await pricing_service.assess(monitor.id, upsert.listing.id)
+                    assessment = await pricing_service.assess(monitor.id, upsert.listing.id)
+                    await notification_service.enqueue_deal(
+                        monitor,
+                        upsert.listing,
+                        assessment,
+                    )
 
             await self.session.commit()
         except Exception:
