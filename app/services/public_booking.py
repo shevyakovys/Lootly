@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.models import (
+    Appointment,
     Customer,
     Location,
     Organization,
@@ -125,7 +126,11 @@ class PublicBookingService:
         result.sort(key=lambda item: (item.start_at, str(item.staff_id)))
         return result
 
-    async def book(self, slug: str, payload: PublicBookingCreate):
+    async def book(
+        self,
+        slug: str,
+        payload: PublicBookingCreate,
+    ) -> Appointment:
         organization = await self.organization(slug)
         location = await self.session.get(Location, payload.location_id)
         service = await self.session.get(Service, payload.service_id)
