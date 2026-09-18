@@ -47,6 +47,7 @@ async def seed(
     customer_id = uuid.uuid4()
 
     session.add(Organization(id=org_id, name="Studio", slug="studio"))
+    await session.flush()
     session.add(
         Location(
             id=location_id,
@@ -55,6 +56,7 @@ async def seed(
             timezone="Europe/Moscow",
         )
     )
+    await session.flush()
     session.add(
         StaffMember(
             id=staff_id,
