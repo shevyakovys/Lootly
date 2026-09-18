@@ -6,7 +6,10 @@ from app.core.config import get_settings
 
 
 def build_broker() -> RedisBroker:
-    broker = RedisBroker(url=get_settings().redis_url, namespace="lootly")
+    broker = RedisBroker(  # type: ignore[no-untyped-call]
+        url=get_settings().redis_url,
+        namespace="lootly",
+    )
     broker.add_middleware(AsyncIO())
     return broker
 
