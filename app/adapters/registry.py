@@ -1,4 +1,4 @@
-from app.adapters.base import MarketplaceAdapter
+from app.adapters.base import MarketplaceAdapter, SourceComplianceError
 
 
 class AdapterNotFound(LookupError):
@@ -17,6 +17,13 @@ class AdapterRegistry:
         source = adapter.source.strip().lower()
         if not source:
             raise ValueError("adapter source must not be empty")
+
+        policy = adapter.access_policy()
+        if not policy.automated_collection_allowed:
+            raise SourceComplianceError(
+                f"automated collection for source {source} is not authorized: {policy.evidence}"
+            )
+
         if source in self._adapters:
             raise AdapterAlreadyRegistered(source)
         self._adapters[source] = adapter

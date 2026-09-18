@@ -13,6 +13,13 @@ class SourceCapabilities:
     supports_keyword_filter: bool
 
 
+@dataclass(frozen=True, slots=True)
+class SourceAccessPolicy:
+    automated_collection_allowed: bool
+    evidence: str
+    reviewed_at: str
+
+
 class AdapterError(RuntimeError):
     pass
 
@@ -25,11 +32,19 @@ class AdapterContractError(AdapterError):
     pass
 
 
+class SourceComplianceError(AdapterError):
+    pass
+
+
 class MarketplaceAdapter(ABC):
     source: str
 
     @abstractmethod
     def capabilities(self) -> SourceCapabilities:
+        raise NotImplementedError
+
+    @abstractmethod
+    def access_policy(self) -> SourceAccessPolicy:
         raise NotImplementedError
 
     @abstractmethod
