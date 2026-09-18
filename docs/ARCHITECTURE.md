@@ -81,7 +81,7 @@ sequenceDiagram
 - normalize_listing();
 - get_source_capabilities().
 
-Каждый источник реализует один и тот же контракт.
+Каждый источник реализует один и тот же контракт. Перед регистрацией adapter обязан пройти fail-closed source compliance gate; см. `docs/SOURCE_COMPLIANCE.md`.
 
 ### Monitoring Worker
 Оркестрирует:
