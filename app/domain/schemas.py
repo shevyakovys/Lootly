@@ -195,3 +195,59 @@ class AppointmentStatusUpdate(BaseModel):
         if value not in allowed:
             raise ValueError("unsupported appointment status")
         return value
+
+
+class PublicOrganizationRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    slug: str
+
+
+class PublicLocationRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    timezone: str
+    address: str | None
+
+
+class PublicServiceRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    duration_minutes: int
+    price: Decimal
+
+
+class PublicStaffRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+
+
+class PublicAvailabilitySlot(AvailabilitySlot):
+    staff_id: uuid.UUID
+
+
+class PublicBookingCreate(BaseModel):
+    location_id: uuid.UUID
+    service_id: uuid.UUID
+    staff_id: uuid.UUID
+    start_at: datetime
+    customer_name: str = Field(min_length=1, max_length=200)
+    customer_phone: str = Field(min_length=3, max_length=50)
+    customer_email: str | None = Field(default=None, max_length=320)
+    note: str | None = None
+    booking_key: str | None = Field(default=None, max_length=100)
+
+    @field_validator("start_at")
+    @classmethod
+    def timezone_required(cls, value: datetime) -> datetime:
+        if value.tzinfo is None:
+            raise ValueError("start_at must be timezone-aware")
+        return value
