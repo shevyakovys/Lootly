@@ -154,3 +154,37 @@ class ListingSnapshot(Base):
     )
 
     listing: Mapped[Listing] = relationship(back_populates="snapshots")
+
+
+class PriceStatistic(Base):
+    __tablename__ = "price_statistics"
+    __table_args__ = (
+        UniqueConstraint(
+            "monitor_id",
+            "listing_id",
+            name="uq_price_statistics_monitor_listing",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    monitor_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("search_monitors.id", ondelete="CASCADE"),
+        index=True,
+    )
+    listing_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("listings.id", ondelete="CASCADE"),
+        index=True,
+    )
+    market_median: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
+    discount_pct: Mapped[Decimal | None] = mapped_column(Numeric(8, 2), nullable=True)
+    deal_score: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
+    sample_size: Mapped[int] = mapped_column(nullable=False)
+    confidence: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False)
+    risk_flags: Mapped[list[str]] = mapped_column(JSON, default=list)
+    calculated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
