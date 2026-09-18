@@ -8,7 +8,7 @@ from app.adapters.base import AdapterContractError
 from app.adapters.registry import AdapterRegistry
 from app.domain.filters import listing_matches_monitor
 from app.domain.models import SearchMonitor
-from app.domain.monitoring import MonitorQuery, MonitoringRunResult
+from app.domain.monitoring import MonitoringRunResult, MonitorQuery
 from app.services.listings import ListingService
 from app.services.search_monitors import SearchMonitorNotFound
 
