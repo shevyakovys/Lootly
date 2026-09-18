@@ -42,7 +42,9 @@ async def session() -> AsyncSession:
     await engine.dispose()
 
 
-async def seed(session: AsyncSession) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID]:
+async def seed(
+    session: AsyncSession,
+) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID]:
     org_id = uuid.uuid4()
     location_id = uuid.uuid4()
     staff_id = uuid.uuid4()
