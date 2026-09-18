@@ -8,7 +8,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.domain.models import SearchMonitor, User
-from app.services.scheduler import SchedulerService
+from app.services.scheduler import PollingTier, SchedulerService, polling_tier
 
 
 @pytest_asyncio.fixture
@@ -29,8 +29,16 @@ async def session() -> AsyncSession:
     await engine.dispose()
 
 
+def test_polling_tier_boundaries() -> None:
+    assert polling_tier(500) is PollingTier.REALTIME
+    assert polling_tier(1_000) is PollingTier.REALTIME
+    assert polling_tier(1_001) is PollingTier.FAST
+    assert polling_tier(5_000) is PollingTier.FAST
+    assert polling_tier(5_001) is PollingTier.STANDARD
+
+
 @pytest.mark.asyncio
-async def test_claim_due_advances_next_check(session: AsyncSession) -> None:
+async def test_claim_due_supports_subsecond_schedule(session: AsyncSession) -> None:
     user_id = uuid.uuid4()
     monitor_id = uuid.uuid4()
     due_at = datetime.now(UTC) - timedelta(seconds=1)
@@ -43,15 +51,19 @@ async def test_claim_due_advances_next_check(session: AsyncSession) -> None:
             source="fake",
             name="Scheduler test",
             query_url="https://example.com/search",
-            interval_seconds=60,
+            poll_interval_ms=500,
             next_check_at=due_at,
         )
     )
     await session.commit()
 
+    before = datetime.now(UTC)
     claimed = await SchedulerService(session).claim_due(limit=10)
     monitor = await session.get(SearchMonitor, monitor_id)
 
-    assert claimed == [monitor_id]
+    assert len(claimed) == 1
+    assert claimed[0].monitor_id == monitor_id
+    assert claimed[0].tier is PollingTier.REALTIME
     assert monitor is not None
-    assert monitor.next_check_at > datetime.now(UTC)
+    delta_ms = (monitor.next_check_at - before).total_seconds() * 1000
+    assert 300 <= delta_ms <= 800

@@ -18,7 +18,7 @@ class SearchMonitorBase(BaseModel):
     include_keywords: list[str] = Field(default_factory=list)
     exclude_keywords: list[str] = Field(default_factory=list)
     region: str | None = Field(default=None, max_length=160)
-    interval_seconds: int = Field(default=60, ge=10, le=86_400)
+    poll_interval_ms: int = Field(default=60_000, ge=500, le=86_400_000)
     min_deal_score: Decimal | None = Field(default=None, ge=0, le=10)
     enabled: bool = True
 
@@ -64,7 +64,7 @@ class SearchMonitorUpdate(BaseModel):
     include_keywords: list[str] | None = None
     exclude_keywords: list[str] | None = None
     region: str | None = Field(default=None, max_length=160)
-    interval_seconds: int | None = Field(default=None, ge=10, le=86_400)
+    poll_interval_ms: int | None = Field(default=None, ge=500, le=86_400_000)
     min_deal_score: Decimal | None = Field(default=None, ge=0, le=10)
     enabled: bool | None = None
 

@@ -50,7 +50,7 @@ class SearchMonitor(Base):
     include_keywords: Mapped[list[str]] = mapped_column(JSON, default=list)
     exclude_keywords: Mapped[list[str]] = mapped_column(JSON, default=list)
     region: Mapped[str | None] = mapped_column(String(160), nullable=True)
-    interval_seconds: Mapped[int] = mapped_column(default=60)
+    poll_interval_ms: Mapped[int] = mapped_column(default=60_000)
     min_deal_score: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     next_check_at: Mapped[datetime] = mapped_column(
