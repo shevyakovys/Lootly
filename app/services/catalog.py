@@ -1,3 +1,5 @@
+import uuid
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.models import Customer, Location, Organization, Service, StaffMember, StaffService
@@ -49,7 +51,18 @@ class CatalogService:
         await self.session.refresh(item)
         return item
 
-    async def assign_service(self, staff_id: object, service_id: object) -> StaffService:
+    async def assign_service(
+        self,
+        staff_id: uuid.UUID,
+        service_id: uuid.UUID,
+    ) -> StaffService:
+        staff = await self.session.get(StaffMember, staff_id)
+        service = await self.session.get(Service, service_id)
+        if staff is None or service is None:
+            raise ValueError("staff or service not found")
+        if staff.organization_id != service.organization_id:
+            raise ValueError("cross-organization assignment is not allowed")
+
         item = StaffService(staff_id=staff_id, service_id=service_id)
         self.session.add(item)
         await self.session.commit()

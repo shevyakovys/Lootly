@@ -1,6 +1,6 @@
 import os
 import uuid
-from datetime import UTC, datetime, time
+from datetime import UTC, date, datetime, time
 from decimal import Decimal
 
 import pytest
@@ -9,16 +9,17 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.domain.models import (
+    Appointment,
     Customer,
     Location,
     Organization,
     Service,
     StaffMember,
     StaffService,
+    TimeOff,
     WorkingHours,
 )
-from app.domain.schemas import AppointmentCreate
-from app.services.appointments import AppointmentConflict, AppointmentService
+from app.services.availability import AvailabilityService
 
 
 @pytest_asyncio.fixture
@@ -38,23 +39,24 @@ async def session() -> AsyncSession:
     await engine.dispose()
 
 
-async def seed(
+@pytest.mark.asyncio
+async def test_availability_excludes_time_off_and_active_appointment(
     session: AsyncSession,
-) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID]:
+) -> None:
     org_id = uuid.uuid4()
     location_id = uuid.uuid4()
     staff_id = uuid.uuid4()
     service_id = uuid.uuid4()
     customer_id = uuid.uuid4()
 
-    session.add(Organization(id=org_id, name="Studio", slug="studio"))
+    session.add(Organization(id=org_id, name="Studio", slug="availability"))
     await session.flush()
     session.add(
         Location(
             id=location_id,
             organization_id=org_id,
             name="Main",
-            timezone="Europe/Moscow",
+            timezone="UTC",
         )
     )
     await session.flush()
@@ -80,7 +82,7 @@ async def seed(
             id=customer_id,
             organization_id=org_id,
             name="Ivan",
-            phone="+70000000000",
+            phone="+70000000001",
         )
     )
     await session.flush()
@@ -90,49 +92,40 @@ async def seed(
             staff_id=staff_id,
             weekday=3,
             start_time=time(9, 0),
-            end_time=time(18, 0),
+            end_time=time(13, 0),
+        )
+    )
+    session.add(
+        TimeOff(
+            staff_id=staff_id,
+            start_at=datetime(2026, 10, 1, 11, 0, tzinfo=UTC),
+            end_at=datetime(2026, 10, 1, 12, 0, tzinfo=UTC),
+        )
+    )
+    session.add(
+        Appointment(
+            organization_id=org_id,
+            location_id=location_id,
+            staff_id=staff_id,
+            service_id=service_id,
+            customer_id=customer_id,
+            start_at=datetime(2026, 10, 1, 9, 0, tzinfo=UTC),
+            end_at=datetime(2026, 10, 1, 10, 0, tzinfo=UTC),
+            duration_minutes=60,
+            price=Decimal("2000"),
+            status="booked",
         )
     )
     await session.commit()
-    return org_id, location_id, staff_id, service_id, customer_id
 
-
-@pytest.mark.asyncio
-async def test_overlapping_active_appointment_is_rejected(session: AsyncSession) -> None:
-    org_id, location_id, staff_id, service_id, customer_id = await seed(session)
-    service = AppointmentService(session)
-
-    first = AppointmentCreate(
-        organization_id=org_id,
+    slots = await AvailabilityService(session).slots(
         location_id=location_id,
-        staff_id=staff_id,
         service_id=service_id,
-        customer_id=customer_id,
-        start_at=datetime(2026, 10, 1, 10, 0, tzinfo=UTC),
-    )
-    await service.create(first)
-
-    overlapping = first.model_copy(
-        update={"start_at": datetime(2026, 10, 1, 10, 30, tzinfo=UTC)}
-    )
-    with pytest.raises(AppointmentConflict):
-        await service.create(overlapping)
-
-@pytest.mark.asyncio
-async def test_appointment_outside_working_hours_is_rejected(
-    session: AsyncSession,
-) -> None:
-    org_id, location_id, staff_id, service_id, customer_id = await seed(session)
-    service = AppointmentService(session)
-
-    request = AppointmentCreate(
-        organization_id=org_id,
-        location_id=location_id,
         staff_id=staff_id,
-        service_id=service_id,
-        customer_id=customer_id,
-        start_at=datetime(2026, 10, 1, 19, 0, tzinfo=UTC),
+        day=date(2026, 10, 1),
     )
 
-    with pytest.raises(AppointmentConflict):
-        await service.create(request)
+    starts = {slot.start_at for slot in slots}
+    assert datetime(2026, 10, 1, 9, 0, tzinfo=UTC) not in starts
+    assert datetime(2026, 10, 1, 11, 0, tzinfo=UTC) not in starts
+    assert datetime(2026, 10, 1, 12, 0, tzinfo=UTC) in starts

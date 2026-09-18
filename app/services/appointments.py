@@ -17,7 +17,7 @@ from app.domain.models import (
     StaffService,
 )
 from app.domain.schemas import AppointmentCreate
-from app.services.availability import BLOCKING_STATUSES
+from app.services.availability import AvailabilityService
 
 
 class AppointmentConflict(RuntimeError):
@@ -85,16 +85,15 @@ class AppointmentService:
             {"key": _lock_key(payload.staff_id, local_day.isoformat())},
         )
 
-        conflict = await self.session.scalar(
-            select(Appointment.id).where(
-                Appointment.staff_id == payload.staff_id,
-                Appointment.status.in_(BLOCKING_STATUSES),
-                Appointment.start_at < end_at,
-                Appointment.end_at > start_at,
-            )
+        available = await AvailabilityService(self.session).interval_is_available(
+            location_id=payload.location_id,
+            service_id=payload.service_id,
+            staff_id=payload.staff_id,
+            start_at=start_at,
+            end_at=end_at,
         )
-        if conflict is not None:
-            raise AppointmentConflict("requested time overlaps existing appointment")
+        if not available:
+            raise AppointmentConflict("requested time is not available")
 
         item = Appointment(
             organization_id=payload.organization_id,

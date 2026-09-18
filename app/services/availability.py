@@ -112,3 +112,75 @@ class AvailabilityService:
                 cursor += step
 
         return result
+
+    async def interval_is_available(
+        self,
+        *,
+        location_id: uuid.UUID,
+        service_id: uuid.UUID,
+        staff_id: uuid.UUID,
+        start_at: datetime,
+        end_at: datetime,
+    ) -> bool:
+        location = await self.session.get(Location, location_id)
+        service = await self.session.get(Service, service_id)
+        if location is None or service is None:
+            return False
+        if not location.active or not service.active:
+            return False
+
+        assignment = await self.session.scalar(
+            select(StaffService.id).where(
+                StaffService.staff_id == staff_id,
+                StaffService.service_id == service_id,
+            )
+        )
+        if assignment is None:
+            return False
+
+        tz = ZoneInfo(location.timezone)
+        start_utc = start_at.astimezone(UTC)
+        end_utc = end_at.astimezone(UTC)
+        local_start = start_utc.astimezone(tz)
+        local_end = end_utc.astimezone(tz)
+
+        if local_start.date() != local_end.date():
+            return False
+
+        hours = list(
+            (
+                await self.session.scalars(
+                    select(WorkingHours).where(
+                        WorkingHours.staff_id == staff_id,
+                        WorkingHours.weekday == local_start.weekday(),
+                    )
+                )
+            ).all()
+        )
+        inside_working_hours = any(
+            local_start.time() >= item.start_time
+            and local_end.time() <= item.end_time
+            for item in hours
+        )
+        if not inside_working_hours:
+            return False
+
+        blocked = await self.session.scalar(
+            select(TimeOff.id).where(
+                TimeOff.staff_id == staff_id,
+                TimeOff.start_at < end_utc,
+                TimeOff.end_at > start_utc,
+            )
+        )
+        if blocked is not None:
+            return False
+
+        conflict = await self.session.scalar(
+            select(Appointment.id).where(
+                Appointment.staff_id == staff_id,
+                Appointment.status.in_(BLOCKING_STATUSES),
+                Appointment.start_at < end_utc,
+                Appointment.end_at > start_utc,
+            )
+        )
+        return conflict is None

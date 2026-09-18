@@ -155,3 +155,20 @@ class AppointmentRead(BaseModel):
     note: str | None
     booking_key: str | None
     created_at: datetime
+
+
+class WorkingHoursRead(WorkingHoursCreate):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+
+
+class TimeOffRead(TimeOffCreate):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+
+
+class StaffServiceRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    staff_id: uuid.UUID
+    service_id: uuid.UUID
