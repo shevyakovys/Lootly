@@ -5,7 +5,7 @@ import pytest_asyncio
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.domain.schemas import BootstrapCreate, LoginRequest
+from app.domain.schemas import BootstrapCreate
 from app.services.auth import AuthenticationError, AuthService
 
 
