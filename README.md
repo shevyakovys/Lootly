@@ -4,17 +4,24 @@ Lootly is a real-time marketplace monitoring and deal discovery service.
 
 ## Current development stage
 
-The first backend foundation provides:
+The backend foundation now provides:
 
 - FastAPI application;
 - PostgreSQL persistence with SQLAlchemy 2.x;
 - Alembic migrations;
 - Redis in the local development stack;
-- user creation/listing API;
-- SearchMonitor CRUD API;
-- basic URL/SSRF input hardening;
+- User and SearchMonitor APIs;
+- marketplace adapter contract and adapter registry;
+- normalized Listing domain model;
+- idempotent listing upsert by `source + external_id`;
+- price-history snapshots on price changes;
+- core monitor filters;
+- monitoring worker/service foundation;
+- URL/SSRF input hardening;
 - Docker Compose environment;
-- CI quality checks.
+- CI with PostgreSQL integration tests.
+
+No concrete marketplace adapter is enabled yet. Source-specific integrations are intentionally isolated behind the adapter contract.
 
 ## Local development
 
@@ -35,6 +42,7 @@ Run checks:
 ```bash
 ruff check .
 mypy app
+alembic upgrade head
 pytest
 ```
 

@@ -3,8 +3,19 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from decimal import Decimal
+from typing import Any
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Numeric, String, Text, func
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -50,3 +61,49 @@ class SearchMonitor(Base):
     )
 
     user: Mapped[User] = relationship(back_populates="monitors")
+
+
+class Listing(Base):
+    __tablename__ = "listings"
+    __table_args__ = (
+        UniqueConstraint("source", "external_id", name="uq_listings_source_external_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    source: Mapped[str] = mapped_column(String(64), index=True)
+    external_id: Mapped[str] = mapped_column(String(255))
+    title: Mapped[str] = mapped_column(String(512))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    price: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    currency: Mapped[str] = mapped_column(String(8), default="RUB")
+    url: Mapped[str] = mapped_column(Text)
+    location: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    seller_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    first_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    raw_payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+
+    snapshots: Mapped[list[ListingSnapshot]] = relationship(
+        back_populates="listing",
+        cascade="all, delete-orphan",
+    )
+
+
+class ListingSnapshot(Base):
+    __tablename__ = "listing_snapshots"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    listing_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("listings.id", ondelete="CASCADE"), index=True
+    )
+    price: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    observed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    listing: Mapped[Listing] = relationship(back_populates="snapshots")
