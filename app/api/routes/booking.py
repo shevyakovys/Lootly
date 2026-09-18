@@ -30,13 +30,13 @@ from app.services.appointments import (
     AppointmentService,
     AppointmentValidationError,
 )
-from app.services.availability import AvailabilityError, AvailabilityService
 from app.services.authorization import (
     TenantAccessDenied,
     TenantGuard,
     require_manager,
     require_organization,
 )
+from app.services.availability import AvailabilityError, AvailabilityService
 from app.services.catalog import CatalogService
 from app.services.schedules import ScheduleService, ScheduleValidationError
 
@@ -209,8 +209,6 @@ async def create_working_hours(
         item = await ScheduleService(session).create_working_hours(payload)
     except TenantAccessDenied as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
-    except TenantAccessDenied as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ScheduleValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return WorkingHoursRead.model_validate(item)
@@ -230,6 +228,8 @@ async def create_time_off(
         require_manager(user)
         await TenantGuard(session, user).staff(payload.staff_id)
         item = await ScheduleService(session).create_time_off(payload)
+    except TenantAccessDenied as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ScheduleValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return TimeOffRead.model_validate(item)
@@ -239,13 +239,13 @@ async def create_time_off(
 async def list_appointments(
     organization_id: uuid.UUID,
     session: DbSession,
+    user: CurrentUser,
     start_at: Annotated[datetime | None, Query()] = None,
     end_at: Annotated[datetime | None, Query()] = None,
     location_id: uuid.UUID | None = None,
     staff_id: uuid.UUID | None = None,
     customer_id: uuid.UUID | None = None,
     limit: Annotated[int, Query(ge=1, le=500)] = 200,
-    user: CurrentUser = None,  # type: ignore[assignment]
 ) -> list[AppointmentRead]:
     try:
         require_organization(user, organization_id)
@@ -325,8 +325,8 @@ async def customer_appointment_history(
     customer_id: uuid.UUID,
     organization_id: uuid.UUID,
     session: DbSession,
+    user: CurrentUser,
     limit: Annotated[int, Query(ge=1, le=500)] = 200,
-    user: CurrentUser = None,  # type: ignore[assignment]
 ) -> list[AppointmentRead]:
     try:
         require_organization(user, organization_id)
