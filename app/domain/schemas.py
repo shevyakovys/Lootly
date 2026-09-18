@@ -114,3 +114,24 @@ class UserRead(BaseModel):
     email: str | None
     telegram_id: str | None
     created_at: datetime
+
+
+class SearchResultRead(BaseModel):
+    listing_id: uuid.UUID
+    external_id: str
+    title: str
+    description: str | None
+    price: Decimal
+    currency: str
+    url: str
+    location: str | None
+    seller_name: str | None
+    published_at: datetime | None
+    first_seen_at: datetime
+    matched_at: datetime
+    market_median: Decimal | None = None
+    discount_pct: Decimal | None = None
+    deal_score: Decimal | None = None
+    sample_size: int | None = None
+    confidence: Decimal | None = None
+    risk_flags: list[str] = Field(default_factory=list)
