@@ -22,6 +22,11 @@ class SearchMonitorBase(BaseModel):
     min_deal_score: Decimal | None = Field(default=None, ge=0, le=10)
     enabled: bool = True
 
+    @field_validator("source")
+    @classmethod
+    def normalize_source(cls, value: str) -> str:
+        return value.strip().lower()
+
     @field_validator("query_url")
     @classmethod
     def validate_query_url(cls, value: str) -> str:
