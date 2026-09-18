@@ -1,3 +1,4 @@
+import uuid
 from typing import Annotated
 
 import jwt
@@ -25,7 +26,7 @@ async def get_current_user(
         )
     try:
         claims = decode_access_token(credentials.credentials)
-        user_id = claims["sub"]
+        user_id = uuid.UUID(claims["sub"])
     except (jwt.PyJWTError, KeyError, ValueError) as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
