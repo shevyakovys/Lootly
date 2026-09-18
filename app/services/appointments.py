@@ -3,10 +3,10 @@ from __future__ import annotations
 import hashlib
 import uuid
 from datetime import UTC, timedelta
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
-from zoneinfo import ZoneInfo
 
 from app.domain.models import (
     Appointment,
