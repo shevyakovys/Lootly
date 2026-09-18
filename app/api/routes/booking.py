@@ -1,5 +1,5 @@
 import uuid
-from datetime import date
+from datetime import date, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, status
@@ -8,6 +8,8 @@ from app.api.dependencies import DbSession
 from app.domain.schemas import (
     AppointmentCreate,
     AppointmentRead,
+    AppointmentReschedule,
+    AppointmentStatusUpdate,
     AvailabilitySlot,
     CustomerCreate,
     CustomerRead,
@@ -156,3 +158,88 @@ async def create_time_off(
     except ScheduleValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return TimeOffRead.model_validate(item)
+
+
+@router.get("/appointments", response_model=list[AppointmentRead])
+async def list_appointments(
+    organization_id: uuid.UUID,
+    session: DbSession,
+    start_at: Annotated[datetime | None, Query()] = None,
+    end_at: Annotated[datetime | None, Query()] = None,
+    location_id: uuid.UUID | None = None,
+    staff_id: uuid.UUID | None = None,
+    customer_id: uuid.UUID | None = None,
+    limit: Annotated[int, Query(ge=1, le=500)] = 200,
+) -> list[AppointmentRead]:
+    items = await AppointmentService(session).list(
+        organization_id=organization_id,
+        start_at=start_at,
+        end_at=end_at,
+        location_id=location_id,
+        staff_id=staff_id,
+        customer_id=customer_id,
+        limit=limit,
+    )
+    return [AppointmentRead.model_validate(item) for item in items]
+
+
+@router.get("/appointments/{appointment_id}", response_model=AppointmentRead)
+async def get_appointment(
+    appointment_id: uuid.UUID,
+    session: DbSession,
+) -> AppointmentRead:
+    try:
+        item = await AppointmentService(session).get(appointment_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail="appointment not found") from exc
+    return AppointmentRead.model_validate(item)
+
+
+@router.post("/appointments/{appointment_id}/reschedule", response_model=AppointmentRead)
+async def reschedule_appointment(
+    appointment_id: uuid.UUID,
+    payload: AppointmentReschedule,
+    session: DbSession,
+) -> AppointmentRead:
+    try:
+        item = await AppointmentService(session).reschedule(appointment_id, payload)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail="appointment not found") from exc
+    except AppointmentConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except AppointmentValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return AppointmentRead.model_validate(item)
+
+
+@router.post("/appointments/{appointment_id}/status", response_model=AppointmentRead)
+async def update_appointment_status(
+    appointment_id: uuid.UUID,
+    payload: AppointmentStatusUpdate,
+    session: DbSession,
+) -> AppointmentRead:
+    try:
+        item = await AppointmentService(session).set_status(
+            appointment_id,
+            payload.status,
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail="appointment not found") from exc
+    except AppointmentValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return AppointmentRead.model_validate(item)
+
+
+@router.get("/customers/{customer_id}/appointments", response_model=list[AppointmentRead])
+async def customer_appointment_history(
+    customer_id: uuid.UUID,
+    organization_id: uuid.UUID,
+    session: DbSession,
+    limit: Annotated[int, Query(ge=1, le=500)] = 200,
+) -> list[AppointmentRead]:
+    items = await AppointmentService(session).list(
+        organization_id=organization_id,
+        customer_id=customer_id,
+        limit=limit,
+    )
+    return [AppointmentRead.model_validate(item) for item in items]

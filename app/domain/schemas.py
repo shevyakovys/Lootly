@@ -172,3 +172,26 @@ class StaffServiceRead(BaseModel):
     id: uuid.UUID
     staff_id: uuid.UUID
     service_id: uuid.UUID
+
+
+class AppointmentReschedule(BaseModel):
+    start_at: datetime
+
+    @field_validator("start_at")
+    @classmethod
+    def timezone_required(cls, value: datetime) -> datetime:
+        if value.tzinfo is None:
+            raise ValueError("start_at must be timezone-aware")
+        return value
+
+
+class AppointmentStatusUpdate(BaseModel):
+    status: str
+
+    @field_validator("status")
+    @classmethod
+    def supported_status(cls, value: str) -> str:
+        allowed = {"booked", "confirmed", "completed", "canceled", "no_show"}
+        if value not in allowed:
+            raise ValueError("unsupported appointment status")
+        return value

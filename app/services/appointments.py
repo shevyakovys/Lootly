@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import uuid
-from datetime import UTC, timedelta
+from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select, text
@@ -16,7 +16,7 @@ from app.domain.models import (
     StaffMember,
     StaffService,
 )
-from app.domain.schemas import AppointmentCreate
+from app.domain.schemas import AppointmentCreate, AppointmentReschedule
 from app.services.availability import AvailabilityService
 
 
@@ -115,10 +115,99 @@ class AppointmentService:
         return item
 
     async def cancel(self, appointment_id: uuid.UUID) -> Appointment:
+        return await self.set_status(appointment_id, "canceled")
+
+
+    async def get(self, appointment_id: uuid.UUID) -> Appointment:
         item = await self.session.get(Appointment, appointment_id)
         if item is None:
             raise LookupError(str(appointment_id))
-        item.status = "canceled"
+        return item
+
+    async def list(
+        self,
+        *,
+        organization_id: uuid.UUID,
+        start_at: datetime | None = None,
+        end_at: datetime | None = None,
+        location_id: uuid.UUID | None = None,
+        staff_id: uuid.UUID | None = None,
+        customer_id: uuid.UUID | None = None,
+        limit: int = 200,
+    ) -> list[Appointment]:
+        query = (
+            select(Appointment)
+            .where(Appointment.organization_id == organization_id)
+            .order_by(Appointment.start_at.asc())
+            .limit(limit)
+        )
+        if start_at is not None:
+            query = query.where(Appointment.end_at > start_at.astimezone(UTC))
+        if end_at is not None:
+            query = query.where(Appointment.start_at < end_at.astimezone(UTC))
+        if location_id is not None:
+            query = query.where(Appointment.location_id == location_id)
+        if staff_id is not None:
+            query = query.where(Appointment.staff_id == staff_id)
+        if customer_id is not None:
+            query = query.where(Appointment.customer_id == customer_id)
+        result = await self.session.scalars(query)
+        return list(result.all())
+
+    async def reschedule(
+        self,
+        appointment_id: uuid.UUID,
+        payload: AppointmentReschedule,
+    ) -> Appointment:
+        item = await self.get(appointment_id)
+        if item.status in {"completed", "canceled", "no_show"}:
+            raise AppointmentValidationError("appointment cannot be rescheduled")
+
+        location = await self.session.get(Location, item.location_id)
+        if location is None:
+            raise AppointmentValidationError("location not found")
+
+        start_at = payload.start_at.astimezone(UTC)
+        end_at = start_at + timedelta(minutes=item.duration_minutes)
+        local_day = start_at.astimezone(ZoneInfo(location.timezone)).date()
+        await self.session.execute(
+            text("SELECT pg_advisory_xact_lock(:key)"),
+            {"key": _lock_key(item.staff_id, local_day.isoformat())},
+        )
+
+        available = await AvailabilityService(self.session).interval_is_available(
+            location_id=item.location_id,
+            service_id=item.service_id,
+            staff_id=item.staff_id,
+            start_at=start_at,
+            end_at=end_at,
+            exclude_appointment_id=item.id,
+        )
+        if not available:
+            raise AppointmentConflict("requested time is not available")
+
+        item.start_at = start_at
+        item.end_at = end_at
+        await self.session.commit()
+        await self.session.refresh(item)
+        return item
+
+    async def set_status(self, appointment_id: uuid.UUID, status: str) -> Appointment:
+        item = await self.get(appointment_id)
+        allowed_transitions = {
+            "booked": {"confirmed", "canceled", "completed", "no_show"},
+            "confirmed": {"canceled", "completed", "no_show"},
+            "completed": set(),
+            "canceled": set(),
+            "no_show": set(),
+        }
+        if status == item.status:
+            return item
+        if status not in allowed_transitions.get(item.status, set()):
+            raise AppointmentValidationError(
+                f"cannot change appointment status from {item.status} to {status}"
+            )
+        item.status = status
         await self.session.commit()
         await self.session.refresh(item)
         return item
