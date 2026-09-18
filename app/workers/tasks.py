@@ -17,16 +17,7 @@ from app.services.notifications import NotificationNotFound, NotificationService
 from app.services.search_monitors import SearchMonitorNotFound
 
 
-@dramatiq.actor(
-    broker=broker,
-    queue_name="monitoring",
-    max_retries=5,
-    min_backoff=5_000,
-    max_backoff=60_000,
-    time_limit=120_000,
-    throws=(AdapterNotFound, SearchMonitorNotFound),
-)
-async def check_monitor(monitor_id: str) -> None:
+async def _run_monitor_check(monitor_id: str) -> None:
     parsed_id = uuid.UUID(monitor_id)
     settings = get_settings()
     redis = Redis.from_url(settings.redis_url)
@@ -56,6 +47,45 @@ async def check_monitor(monitor_id: str) -> None:
         except LockNotOwnedError:
             pass
         await redis.aclose()
+
+
+@dramatiq.actor(
+    broker=broker,
+    queue_name="monitoring",
+    max_retries=5,
+    min_backoff=5_000,
+    max_backoff=60_000,
+    time_limit=120_000,
+    throws=(AdapterNotFound, SearchMonitorNotFound),
+)
+async def check_monitor(monitor_id: str) -> None:
+    await _run_monitor_check(monitor_id)
+
+
+@dramatiq.actor(
+    broker=broker,
+    queue_name="monitoring-fast",
+    max_retries=5,
+    min_backoff=2_000,
+    max_backoff=30_000,
+    time_limit=60_000,
+    throws=(AdapterNotFound, SearchMonitorNotFound),
+)
+async def check_monitor_fast(monitor_id: str) -> None:
+    await _run_monitor_check(monitor_id)
+
+
+@dramatiq.actor(
+    broker=broker,
+    queue_name="monitoring-realtime",
+    max_retries=3,
+    min_backoff=1_000,
+    max_backoff=10_000,
+    time_limit=30_000,
+    throws=(AdapterNotFound, SearchMonitorNotFound),
+)
+async def check_monitor_realtime(monitor_id: str) -> None:
+    await _run_monitor_check(monitor_id)
 
 
 @dramatiq.actor(

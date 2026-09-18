@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from enum import StrEnum
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,11 +11,31 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.domain.models import SearchMonitor
 
 
+class PollingTier(StrEnum):
+    REALTIME = "realtime"
+    FAST = "fast"
+    STANDARD = "standard"
+
+
+@dataclass(frozen=True, slots=True)
+class ClaimedMonitor:
+    monitor_id: uuid.UUID
+    tier: PollingTier
+
+
+def polling_tier(interval_ms: int) -> PollingTier:
+    if interval_ms <= 1_000:
+        return PollingTier.REALTIME
+    if interval_ms <= 5_000:
+        return PollingTier.FAST
+    return PollingTier.STANDARD
+
+
 class SchedulerService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def claim_due(self, limit: int) -> list[uuid.UUID]:
+    async def claim_due(self, limit: int) -> list[ClaimedMonitor]:
         now = datetime.now(UTC)
         statement = (
             select(SearchMonitor)
@@ -27,11 +49,18 @@ class SchedulerService:
         )
         monitors = list((await self.session.scalars(statement)).all())
 
+        claimed: list[ClaimedMonitor] = []
         for monitor in monitors:
-            monitor.next_check_at = now + timedelta(seconds=monitor.interval_seconds)
+            monitor.next_check_at = now + timedelta(milliseconds=monitor.poll_interval_ms)
+            claimed.append(
+                ClaimedMonitor(
+                    monitor_id=monitor.id,
+                    tier=polling_tier(monitor.poll_interval_ms),
+                )
+            )
 
         await self.session.commit()
-        return [monitor.id for monitor in monitors]
+        return claimed
 
     async def release_for_retry(self, monitor_id: uuid.UUID) -> None:
         monitor = await self.session.get(SearchMonitor, monitor_id)

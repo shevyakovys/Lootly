@@ -1,20 +1,24 @@
 from __future__ import annotations
 
 import asyncio
-import uuid
 
 import structlog
 
 from app.core.config import get_settings
 from app.db.session import get_session_factory
-from app.services.scheduler import SchedulerService
-from app.workers.tasks import check_monitor
+from app.services.scheduler import ClaimedMonitor, PollingTier, SchedulerService
+from app.workers.tasks import check_monitor, check_monitor_fast, check_monitor_realtime
 
 logger = structlog.get_logger(__name__)
 
 
-async def enqueue_monitor(monitor_id: uuid.UUID) -> None:
-    await asyncio.to_thread(check_monitor.send, str(monitor_id))
+async def enqueue_monitor(claimed: ClaimedMonitor) -> None:
+    actor = {
+        PollingTier.REALTIME: check_monitor_realtime,
+        PollingTier.FAST: check_monitor_fast,
+        PollingTier.STANDARD: check_monitor,
+    }[claimed.tier]
+    await asyncio.to_thread(actor.send, str(claimed.monitor_id))
 
 
 async def scheduler_tick() -> int:
@@ -23,14 +27,18 @@ async def scheduler_tick() -> int:
         due = await SchedulerService(session).claim_due(settings.scheduler_batch_size)
 
     enqueued = 0
-    for monitor_id in due:
+    for claimed in due:
         try:
-            await enqueue_monitor(monitor_id)
+            await enqueue_monitor(claimed)
             enqueued += 1
         except Exception:
-            logger.exception("monitor_enqueue_failed", monitor_id=str(monitor_id))
+            logger.exception(
+                "monitor_enqueue_failed",
+                monitor_id=str(claimed.monitor_id),
+                tier=claimed.tier,
+            )
             async with get_session_factory()() as recovery_session:
-                await SchedulerService(recovery_session).release_for_retry(monitor_id)
+                await SchedulerService(recovery_session).release_for_retry(claimed.monitor_id)
 
     return enqueued
 

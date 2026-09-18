@@ -150,3 +150,20 @@ Scheduler должен обеспечивать отсутствие дубле�
 4. Explicit domain boundaries.
 5. Observability from day one.
 6. No anti-bot circumvention as a system requirement.
+
+
+## 9. High-frequency distributed polling
+
+Для разрешенных источников Lootly поддерживает три очереди мониторинга:
+
+- `monitoring-realtime` — интервалы до 1 секунды;
+- `monitoring-fast` — интервалы от 1 до 5 секунд;
+- `monitoring` — интервалы свыше 5 секунд.
+
+Scheduler использует PostgreSQL `FOR UPDATE SKIP LOCKED`, поэтому несколько экземпляров scheduler могут
+распределенно забирать due-monitorings без двойного claim. Повторная обработка дополнительно защищена
+Redis-lock на monitor id.
+
+Минимальный программно поддерживаемый интервал — 500 мс. Реальный минимальный интервал для конкретного
+источника обязан учитывать его документированные лимиты и `SourceAccessPolicy`. Этот механизм не разрешает
+обход rate limits, CAPTCHA или антибот-защиты.
