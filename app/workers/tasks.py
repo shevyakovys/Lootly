@@ -10,8 +10,8 @@ from app.adapters.factory import build_adapter_registry
 from app.adapters.registry import AdapterNotFound
 from app.core.config import get_settings
 from app.db.session import get_session_factory
-from app.queue import broker
 from app.notifications.telegram import PermanentNotificationError, TelegramClient
+from app.queue import broker
 from app.services.monitoring import MonitoringService
 from app.services.notifications import NotificationNotFound, NotificationService
 from app.services.search_monitors import SearchMonitorNotFound
@@ -56,7 +56,6 @@ async def check_monitor(monitor_id: str) -> None:
         except LockNotOwnedError:
             pass
         await redis.aclose()
-
 
 
 @dramatiq.actor(
