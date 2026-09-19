@@ -61,6 +61,7 @@ async def test_analytics_counts_public_and_canceled(session: AsyncSession) -> No
     )
     session.add_all([staff, service, customer])
     await session.flush()
+    now = datetime.now(UTC)
     session.add(
         WorkingHours(
             staff_id=staff.id,
@@ -69,7 +70,6 @@ async def test_analytics_counts_public_and_canceled(session: AsyncSession) -> No
             end_time=(now + timedelta(hours=7)).time().replace(tzinfo=None),
         )
     )
-    now = datetime.now(UTC)
     session.add(
         PublicBookingEvent(
             organization_id=org.id,
