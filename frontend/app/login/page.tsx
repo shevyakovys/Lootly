@@ -1,9 +1,11 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { useRouter } from "next/navigation";
 import { api } from "../lib/api";
 
 export default function LoginPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -17,7 +19,7 @@ export default function LoginPage() {
         body: JSON.stringify({ email, password }),
       });
       localStorage.setItem("lootly_token", result.access_token);
-      window.location.href = "/dashboard";
+      router.push("/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ошибка входа");
     }
