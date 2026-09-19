@@ -42,7 +42,7 @@ export default function CatalogPage() {
       return;
     }
     tokenRef.current = accessToken;
-    void load(accessToken).catch((err) => setMessage(err instanceof Error ? err.message : "Ошибка"));
+    void load(accessToken);
   }, [load, router]);
 
   async function createLocation(event: FormEvent<HTMLFormElement>) {
