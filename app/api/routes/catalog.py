@@ -141,8 +141,14 @@ async def delete_working_hours(
     session: DbSession,
     user: CurrentUser,
 ) -> None:
-    require_manager(user)
-    await ScheduleService(session).delete_working_hours(item_id)
+    try:
+        require_manager(user)
+        service = ScheduleService(session)
+        item = await service.get_working_hours(item_id)
+        await TenantGuard(session, user).staff(item.staff_id)
+        await service.delete_working_hours(item_id)
+    except (LookupError, TenantAccessDenied) as exc:
+        raise HTTPException(status_code=404, detail="working hours not found") from exc
 
 
 @router.get("/staff/{staff_id}/time-off", response_model=list[TimeOffRead])
@@ -165,5 +171,11 @@ async def delete_time_off(
     session: DbSession,
     user: CurrentUser,
 ) -> None:
-    require_manager(user)
-    await ScheduleService(session).delete_time_off(item_id)
+    try:
+        require_manager(user)
+        service = ScheduleService(session)
+        item = await service.get_time_off(item_id)
+        await TenantGuard(session, user).staff(item.staff_id)
+        await service.delete_time_off(item_id)
+    except (LookupError, TenantAccessDenied) as exc:
+        raise HTTPException(status_code=404, detail="time off not found") from exc
