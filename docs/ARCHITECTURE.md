@@ -21,7 +21,7 @@ flowchart LR
 
     BOOK --> OUTBOX[Notification Outbox]
     OUTBOX --> WORKER[Notification Worker]
-    WORKER --> MSG[Email/SMS/Messenger]
+    WORKER --> MSG[Webhook / local delivery adapter]
 ```
 
 ## Domain boundaries
@@ -95,8 +95,8 @@ sequenceDiagram
 
 Масштабирование:
 - несколько API replicas;
-- PostgreSQL как consistency authority;
-- Redis для кэша и фоновых задач;
+- PostgreSQL как consistency authority и notification outbox;
+- shared rate limiter (Redis/API gateway) перед горизонтальным масштабированием public API;
 - отдельные workers для уведомлений.
 
 Не выделять микросервисы до измеренной необходимости.
@@ -108,5 +108,5 @@ sequenceDiagram
 - group sessions;
 - resources/rooms;
 - waitlist;
-- analytics;
+- advanced analytics;
 - integrations.

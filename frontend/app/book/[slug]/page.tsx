@@ -25,6 +25,16 @@ export default function BookingPage({ params }: { params: Promise<{ slug: string
   useEffect(() => {
     void params.then(({ slug: value }) => {
       setSlug(value);
+      const storageKey = `lootly_booking_session_${value}`;
+      let sessionKey = sessionStorage.getItem(storageKey);
+      if (!sessionKey) {
+        sessionKey = crypto.randomUUID();
+        sessionStorage.setItem(storageKey, sessionKey);
+      }
+      void api<void>(`/public/${value}/events`, {
+        method: "POST",
+        body: JSON.stringify({ session_key: sessionKey, event_type: "page_view" }),
+      }).catch(() => undefined);
       void Promise.all([
         api<Item[]>(`/public/${value}/locations`),
         api<Service[]>(`/public/${value}/services`),

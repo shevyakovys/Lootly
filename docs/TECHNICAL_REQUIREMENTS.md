@@ -12,12 +12,15 @@ Backend:
 Storage:
 - PostgreSQL
 
-Async/background later:
-- Redis
-- task queue for reminders and integrations
+Background processing:
+- PostgreSQL notification outbox
+- dedicated notification worker
+- optional webhook delivery adapter
 
 Frontend:
-- Next.js + TypeScript + Tailwind
+- Next.js 16
+- React 19
+- TypeScript
 
 Infrastructure:
 - Docker
@@ -98,7 +101,7 @@ MVP endpoints:
 - tenant isolation on every organization-owned entity;
 - authentication before admin API;
 - public booking endpoints expose only necessary fields;
-- rate limiting public booking;
+- per-process rate limiting public booking in MVP; use a shared limiter (Redis/gateway) when scaling to multiple API replicas;
 - phone/email treated as personal data;
 - structured logs without unnecessary PII;
 - secrets via environment/secrets manager.
@@ -118,4 +121,6 @@ Required:
 - ruff;
 - mypy;
 - alembic upgrade head;
-- pytest.
+- pytest;
+- frontend ESLint;
+- frontend production build.

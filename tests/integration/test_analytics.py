@@ -8,7 +8,16 @@ import pytest_asyncio
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.domain.models import Appointment, Customer, Location, Organization, Service, StaffMember
+from app.domain.models import (
+    Appointment,
+    Customer,
+    Location,
+    Organization,
+    PublicBookingEvent,
+    Service,
+    StaffMember,
+    WorkingHours,
+)
 from app.services.analytics import AnalyticsService
 
 
@@ -52,7 +61,22 @@ async def test_analytics_counts_public_and_canceled(session: AsyncSession) -> No
     )
     session.add_all([staff, service, customer])
     await session.flush()
+    session.add(
+        WorkingHours(
+            staff_id=staff.id,
+            weekday=now.weekday(),
+            start_time=(now - timedelta(hours=1)).time().replace(tzinfo=None),
+            end_time=(now + timedelta(hours=7)).time().replace(tzinfo=None),
+        )
+    )
     now = datetime.now(UTC)
+    session.add(
+        PublicBookingEvent(
+            organization_id=org.id,
+            session_key="analytics-session",
+            event_type="page_view",
+        )
+    )
     session.add(
         Appointment(
             organization_id=org.id,
@@ -75,3 +99,5 @@ async def test_analytics_counts_public_and_canceled(session: AsyncSession) -> No
     assert result["bookings_created"] == 1
     assert result["public_bookings"] == 1
     assert result["canceled"] == 1
+    assert result["online_booking_conversion"] == 1.0
+    assert float(result["staff_utilization"]) >= 0.0

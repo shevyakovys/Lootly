@@ -367,8 +367,22 @@ class AnalyticsOverview(BaseModel):
     completed: int
     canceled: int
     no_show: int
+    online_booking_conversion: float
+    staff_utilization: float
     cancellation_rate: float
     no_show_rate: float
     average_lead_time_hours: float
     repeat_customer_rate: float
     notification_delivery_rate: float
+
+
+class PublicBookingEventCreate(BaseModel):
+    session_key: str = Field(min_length=8, max_length=100)
+    event_type: str = "page_view"
+
+    @field_validator("event_type")
+    @classmethod
+    def supported_event_type(cls, value: str) -> str:
+        if value != "page_view":
+            raise ValueError("unsupported public booking event")
+        return value

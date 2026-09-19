@@ -10,6 +10,8 @@ type Analytics = {
   completed: number;
   canceled: number;
   no_show: number;
+  online_booking_conversion: number;
+  staff_utilization: number;
   cancellation_rate: number;
   no_show_rate: number;
   average_lead_time_hours: number;
@@ -67,6 +69,8 @@ export default function Dashboard() {
           <div className="card"><span className="muted">Онлайн</span><div className="metric">{analytics.public_bookings}</div></div>
           <div className="card"><span className="muted">Завершено</span><div className="metric">{analytics.completed}</div></div>
           <div className="card"><span className="muted">Отмены</span><div className="metric">{Math.round(analytics.cancellation_rate * 100)}%</div></div>
+          <div className="card"><span className="muted">Конверсия online</span><div className="metric">{Math.round(analytics.online_booking_conversion * 100)}%</div></div>
+          <div className="card"><span className="muted">Загрузка команды</span><div className="metric">{Math.round(analytics.staff_utilization * 100)}%</div></div>
         </div>
       )}
       <h2>Журнал записей</h2>
