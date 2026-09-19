@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { api } from "../lib/api";
 
 type Me = { organization_id: string; email: string; role: string };
@@ -27,6 +28,7 @@ type Appointment = {
 };
 
 export default function Dashboard() {
+  const router = useRouter();
   const [me, setMe] = useState<Me | null>(null);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -35,7 +37,7 @@ export default function Dashboard() {
   useEffect(() => {
     const token = localStorage.getItem("lootly_token");
     if (!token) {
-      window.location.href = "/login";
+      router.push("/login");
       return;
     }
     void (async () => {
@@ -56,7 +58,7 @@ export default function Dashboard() {
         setError(err instanceof Error ? err.message : "Ошибка загрузки");
       }
     })();
-  }, []);
+  }, [router]);
 
   async function setStatus(id: string, status: string) {
     const token = localStorage.getItem("lootly_token");
