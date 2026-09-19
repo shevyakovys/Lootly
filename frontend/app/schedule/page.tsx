@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { api } from "../lib/api";
 
 type Me = { role: string };
@@ -11,7 +12,8 @@ type TimeOff = { id: string; start_at: string; end_at: string; reason?: string |
 const weekdays = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
 export default function SchedulePage() {
-  const [token, setToken] = useState("");
+  const router = useRouter();
+  const tokenRef = useRef("");
   const [me, setMe] = useState<Me | null>(null);
   const [staff, setStaff] = useState<Staff[]>([]);
   const [staffId, setStaffId] = useState("");
@@ -32,10 +34,10 @@ export default function SchedulePage() {
   useEffect(() => {
     const accessToken = localStorage.getItem("lootly_token") ?? "";
     if (!accessToken) {
-      window.location.href = "/login";
+      router.push("/login");
       return;
     }
-    setToken(accessToken);
+    tokenRef.current = accessToken;
     void Promise.all([
       api<Me>("/auth/me", {}, accessToken),
       api<Staff[]>("/catalog/staff", {}, accessToken),
@@ -47,7 +49,7 @@ export default function SchedulePage() {
         void loadSchedule(accessToken, rows[0].id);
       }
     }).catch((err) => setMessage(err instanceof Error ? err.message : "Ошибка"));
-  }, [loadSchedule]);
+  }, [loadSchedule, router]);
 
   async function addHours(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -60,8 +62,8 @@ export default function SchedulePage() {
         start_time: form.get("start_time"),
         end_time: form.get("end_time"),
       }),
-    }, token);
-    await loadSchedule(token, staffId);
+    }, tokenRef.current);
+    await loadSchedule(tokenRef.current, staffId);
   }
 
   async function addTimeOff(event: FormEvent<HTMLFormElement>) {
@@ -77,13 +79,13 @@ export default function SchedulePage() {
         end_at: new Date(end).toISOString(),
         reason: form.get("reason") || null,
       }),
-    }, token);
-    await loadSchedule(token, staffId);
+    }, tokenRef.current);
+    await loadSchedule(tokenRef.current, staffId);
   }
 
   async function remove(kind: "working-hours" | "time-off", id: string) {
-    await api(`/catalog/${kind}/${id}`, { method: "DELETE" }, token);
-    await loadSchedule(token, staffId);
+    await api(`/catalog/${kind}/${id}`, { method: "DELETE" }, tokenRef.current);
+    await loadSchedule(tokenRef.current, staffId);
   }
 
   const manager = me?.role === "owner" || me?.role === "admin";
@@ -93,7 +95,7 @@ export default function SchedulePage() {
       <h1>Расписание</h1>
       {message && <p>{message}</p>}
       <label>Сотрудник
-        <select value={staffId} onChange={(e) => { setStaffId(e.target.value); void loadSchedule(token, e.target.value); }}>
+        <select value={staffId} onChange={(e) => { setStaffId(e.target.value); void loadSchedule(tokenRef.current, e.target.value); }}>
           {staff.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
         </select>
       </label>
