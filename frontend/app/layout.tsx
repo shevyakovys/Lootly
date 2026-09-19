@@ -11,8 +11,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="ru">
       <body>
         <nav>
-          <strong>Lootly</strong>
-          <span className="muted">Online Booking</span>
+          <strong><a href="/">Lootly</a></strong>
+          <div style={{ display: "flex", gap: 16 }}>
+            <a href="/dashboard">Журнал</a>
+            <a href="/catalog">Справочники</a>
+            <a href="/schedule">Расписание</a>
+          </div>
         </nav>
         {children}
       </body>

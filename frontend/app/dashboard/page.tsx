@@ -58,6 +58,20 @@ export default function Dashboard() {
     })();
   }, []);
 
+  async function setStatus(id: string, status: string) {
+    const token = localStorage.getItem("lootly_token");
+    if (!token) return;
+    const updated = await api<Appointment>(
+      `/appointments/${id}/status`,
+      {
+        method: "POST",
+        body: JSON.stringify({ status }),
+      },
+      token,
+    );
+    setAppointments((rows) => rows.map((row) => row.id === id ? updated : row));
+  }
+
   return (
     <main>
       <h1>Панель управления</h1>
@@ -82,6 +96,13 @@ export default function Dashboard() {
             <span>{item.status}</span>
             <span>{item.price}</span>
             <span>{item.booking_source}</span>
+            {["booked", "confirmed"].includes(item.status) && (
+              <span style={{ display: "flex", gap: 6 }}>
+                {item.status === "booked" && <button onClick={() => void setStatus(item.id, "confirmed")}>Подтвердить</button>}
+                <button onClick={() => void setStatus(item.id, "completed")}>Завершить</button>
+                <button className="secondary" onClick={() => void setStatus(item.id, "canceled")}>Отменить</button>
+              </span>
+            )}
           </div>
         ))}
       </div>
