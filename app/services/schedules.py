@@ -49,17 +49,25 @@ class ScheduleService:
         )
         return list(rows.all())
 
-    async def delete_working_hours(self, item_id: uuid.UUID) -> None:
+    async def get_working_hours(self, item_id: uuid.UUID) -> WorkingHours:
         item = await self.session.get(WorkingHours, item_id)
         if item is None:
             raise LookupError(str(item_id))
+        return item
+
+    async def get_time_off(self, item_id: uuid.UUID) -> TimeOff:
+        item = await self.session.get(TimeOff, item_id)
+        if item is None:
+            raise LookupError(str(item_id))
+        return item
+
+    async def delete_working_hours(self, item_id: uuid.UUID) -> None:
+        item = await self.get_working_hours(item_id)
         await self.session.delete(item)
         await self.session.commit()
 
     async def delete_time_off(self, item_id: uuid.UUID) -> None:
-        item = await self.session.get(TimeOff, item_id)
-        if item is None:
-            raise LookupError(str(item_id))
+        item = await self.get_time_off(item_id)
         await self.session.delete(item)
         await self.session.commit()
 
