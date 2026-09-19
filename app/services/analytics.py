@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import func, select
+from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.models import Appointment, NotificationOutbox
@@ -113,7 +114,7 @@ class AnalyticsService:
             "notification_delivery_rate": sent / delivered_total if delivered_total else 0.0,
         }
 
-    async def _count(self, filters: list[object]) -> int:
+    async def _count(self, filters: Sequence[ColumnElement[bool]]) -> int:
         value = await self.session.scalar(
             select(func.count(Appointment.id)).where(*filters)
         )
