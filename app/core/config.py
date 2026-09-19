@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     notification_timeout_seconds: float = 5.0
     notification_batch_size: int = 100
     reminder_hours_before: int = 24
+    frontend_origin: str = "http://localhost:3000"
 
 
 @lru_cache
