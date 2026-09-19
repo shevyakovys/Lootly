@@ -3,8 +3,6 @@ from __future__ import annotations
 import asyncio
 from collections import defaultdict, deque
 from time import monotonic
-from typing import Deque
-
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import JSONResponse, Response
@@ -16,7 +14,7 @@ class PublicRateLimitMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.limit = limit
         self.window_seconds = 60.0
-        self._requests: dict[str, Deque[float]] = defaultdict(deque)
+        self._requests: dict[str, deque[float]] = defaultdict(deque)
         self._lock = asyncio.Lock()
 
     async def dispatch(
