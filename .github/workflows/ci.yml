@@ -6,7 +6,7 @@ on:
     branches: [main]
 
 jobs:
-  quality:
+  backend:
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -24,7 +24,7 @@ jobs:
           --health-retries 10
     env:
       LOOTLY_DATABASE_URL: postgresql+asyncpg://lootly:lootly@127.0.0.1:5432/lootly_test
-      LOOTLY_REDIS_URL: redis://127.0.0.1:6379/0
+      LOOTLY_AUTH_SECRET_KEY: ci-secret-key
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -41,3 +41,22 @@ jobs:
         run: alembic upgrade head
       - name: Tests
         run: pytest
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install
+        run: npm install
+      - name: Lint
+        run: npm run lint
+      - name: Build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
+        run: npm run build

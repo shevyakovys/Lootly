@@ -115,7 +115,6 @@ Lootly — SaaS для бизнеса в сфере услуг, аналог п�
 
 V2:
 - платежи/предоплата;
-- напоминания;
 - waitlist;
 - ресурсы/кабинеты;
 - recurring appointments.
@@ -123,8 +122,8 @@ V2:
 V3:
 - групповые занятия;
 - loyalty;
-- аналитика;
-- роли/permissions;
+- advanced analytics;
+- fine-grained permissions;
 - multi-location reporting.
 
 V4:

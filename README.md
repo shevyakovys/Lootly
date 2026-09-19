@@ -1,36 +1,65 @@
 # Lootly
 
-Lootly — SaaS-платформа онлайн-бронирования для бизнеса в сфере услуг.
+Lootly — SaaS-платформа онлайн-бронирования для сервисного бизнеса.
 
-Текущая продуктовая концепция: онлайн-запись клиентов, сотрудники, услуги, филиалы, расписания, свободные слоты и журнал визитов.
+## Что реализовано
 
-## MVP foundation
+- организации и филиалы;
+- сотрудники и услуги;
+- назначение услуг сотрудникам;
+- рабочие часы и time off;
+- расчет свободных слотов;
+- concurrency-safe создание записи;
+- публичная online booking страница;
+- журнал записей, перенос, отмена и статусы;
+- клиентская база и история визитов;
+- owner/admin/staff RBAC;
+- JWT authentication;
+- notification outbox, подтверждения и reminders;
+- операционная аналитика;
+- Next.js admin dashboard и public booking UI;
+- Docker Compose и CI для backend/frontend.
 
-- FastAPI;
-- PostgreSQL + SQLAlchemy;
-- Alembic;
-- organizations / locations;
-- staff / services;
-- customers;
-- working hours / time off;
-- availability calculation;
-- appointments with overlap protection;
-- Docker Compose;
-- GitHub Actions.
-
-## Local development
+## Запуск
 
 ```bash
 cp .env.example .env
-docker compose up -d postgres
-python -m venv .venv
-source .venv/bin/activate
-pip install -e '.[dev]'
-alembic upgrade head
-uvicorn app.main:app --reload
+docker compose up --build
 ```
 
-Docs:
+После запуска:
+
+- API: http://localhost:8000
+- Swagger: http://localhost:8000/docs
+- Web: http://localhost:3000
+
+Создайте первого владельца:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/auth/bootstrap \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "organization_name": "My Studio",
+    "organization_slug": "my-studio",
+    "email": "owner@example.com",
+    "password": "change-this-password"
+  }'
+```
+
+Затем войдите через `/login`.
+
+Публичная запись организации со slug `my-studio`:
+`http://localhost:3000/book/my-studio`.
+
+## Уведомления
+
+Без внешних credentials notification worker использует локальный delivery adapter и отмечает
+outbox-сообщения доставленными, не логируя PII. Для реальной доставки укажите
+`LOOTLY_NOTIFICATION_WEBHOOK_URL`; worker отправит JSON с recipient/message/event_type в ваш
+SMS/email/messenger gateway.
+
+## Документация
+
 - `docs/BUSINESS_REQUIREMENTS.md`
 - `docs/TECHNICAL_REQUIREMENTS.md`
 - `docs/ARCHITECTURE.md`

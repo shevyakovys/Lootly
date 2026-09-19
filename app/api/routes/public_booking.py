@@ -9,6 +9,7 @@ from app.domain.schemas import (
     AppointmentRead,
     PublicAvailabilitySlot,
     PublicBookingCreate,
+    PublicBookingEventCreate,
     PublicLocationRead,
     PublicOrganizationRead,
     PublicServiceRead,
@@ -32,6 +33,24 @@ async def public_organization(slug: str, session: DbSession) -> PublicOrganizati
     except PublicBookingNotFound as exc:
         raise HTTPException(status_code=404, detail="organization not found") from exc
     return PublicOrganizationRead.model_validate(item)
+
+
+@router.post("/{slug}/events", status_code=204)
+async def public_event(
+    slug: str,
+    payload: PublicBookingEventCreate,
+    session: DbSession,
+) -> None:
+    booking = PublicBookingService(session)
+    try:
+        organization = await booking.organization(slug)
+    except PublicBookingNotFound as exc:
+        raise HTTPException(status_code=404, detail="organization not found") from exc
+    await booking.track_event(
+        organization.id,
+        payload.session_key,
+        payload.event_type,
+    )
 
 
 @router.get("/{slug}/locations", response_model=list[PublicLocationRead])

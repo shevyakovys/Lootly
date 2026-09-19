@@ -18,6 +18,7 @@ from app.domain.models import (
 )
 from app.domain.schemas import AppointmentCreate, AppointmentReschedule
 from app.services.availability import AvailabilityService
+from app.services.notifications import NotificationService
 
 
 class AppointmentConflict(RuntimeError):
@@ -108,8 +109,11 @@ class AppointmentService:
             status="booked",
             note=payload.note,
             booking_key=payload.booking_key,
+            booking_source=payload.booking_source,
         )
         self.session.add(item)
+        await self.session.flush()
+        await NotificationService(self.session).enqueue_created(item)
         await self.session.commit()
         await self.session.refresh(item)
         return item
@@ -188,6 +192,7 @@ class AppointmentService:
 
         item.start_at = start_at
         item.end_at = end_at
+        await NotificationService(self.session).enqueue_rescheduled(item)
         await self.session.commit()
         await self.session.refresh(item)
         return item
@@ -208,6 +213,8 @@ class AppointmentService:
                 f"cannot change appointment status from {item.status} to {status}"
             )
         item.status = status
+        if status == "canceled":
+            await NotificationService(self.session).enqueue_canceled(item)
         await self.session.commit()
         await self.session.refresh(item)
         return item

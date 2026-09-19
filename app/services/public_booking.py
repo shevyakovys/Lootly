@@ -11,6 +11,7 @@ from app.domain.models import (
     Customer,
     Location,
     Organization,
+    PublicBookingEvent,
     Service,
     StaffMember,
     StaffService,
@@ -43,6 +44,29 @@ class PublicBookingService:
         if item is None:
             raise PublicBookingNotFound(slug)
         return item
+
+    async def track_event(
+        self,
+        organization_id: uuid.UUID,
+        session_key: str,
+        event_type: str,
+    ) -> None:
+        existing = await self.session.scalar(
+            select(PublicBookingEvent.id).where(
+                PublicBookingEvent.organization_id == organization_id,
+                PublicBookingEvent.session_key == session_key,
+                PublicBookingEvent.event_type == event_type,
+            )
+        )
+        if existing is None:
+            self.session.add(
+                PublicBookingEvent(
+                    organization_id=organization_id,
+                    session_key=session_key,
+                    event_type=event_type,
+                )
+            )
+            await self.session.commit()
 
     async def locations(self, organization_id: uuid.UUID) -> list[Location]:
         result = await self.session.scalars(
@@ -173,5 +197,6 @@ class PublicBookingService:
                 start_at=payload.start_at,
                 note=payload.note,
                 booking_key=payload.booking_key,
+                booking_source="public",
             )
         )
