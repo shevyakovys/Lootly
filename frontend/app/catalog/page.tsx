@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { api } from "../lib/api";
 
 type Me = { organization_id: string; role: string };
@@ -10,7 +11,8 @@ type Staff = { id: string; name: string; location_id: string; active: boolean };
 type Customer = { id: string; name: string; phone: string; email?: string | null };
 
 export default function CatalogPage() {
-  const [token, setToken] = useState("");
+  const router = useRouter();
+  const tokenRef = useRef("");
   const [me, setMe] = useState<Me | null>(null);
   const [locations, setLocations] = useState<Location[]>([]);
   const [services, setServices] = useState<Service[]>([]);
@@ -36,12 +38,12 @@ export default function CatalogPage() {
   useEffect(() => {
     const accessToken = localStorage.getItem("lootly_token") ?? "";
     if (!accessToken) {
-      window.location.href = "/login";
+      router.push("/login");
       return;
     }
-    setToken(accessToken);
+    tokenRef.current = accessToken;
     void load(accessToken).catch((err) => setMessage(err instanceof Error ? err.message : "Ошибка"));
-  }, [load]);
+  }, [load, router]);
 
   async function createLocation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -55,9 +57,9 @@ export default function CatalogPage() {
         timezone: form.get("timezone"),
         address: form.get("address") || null,
       }),
-    }, token);
+    }, tokenRef.current);
     event.currentTarget.reset();
-    await load(token);
+    await load(tokenRef.current);
   }
 
   async function createService(event: FormEvent<HTMLFormElement>) {
@@ -72,9 +74,9 @@ export default function CatalogPage() {
         duration_minutes: Number(form.get("duration")),
         price: form.get("price"),
       }),
-    }, token);
+    }, tokenRef.current);
     event.currentTarget.reset();
-    await load(token);
+    await load(tokenRef.current);
   }
 
   async function createStaff(event: FormEvent<HTMLFormElement>) {
@@ -88,9 +90,9 @@ export default function CatalogPage() {
         location_id: form.get("location_id"),
         name: form.get("name"),
       }),
-    }, token);
+    }, tokenRef.current);
     event.currentTarget.reset();
-    await load(token);
+    await load(tokenRef.current);
   }
 
   async function createCustomer(event: FormEvent<HTMLFormElement>) {
@@ -105,9 +107,9 @@ export default function CatalogPage() {
         phone: form.get("phone"),
         email: form.get("email") || null,
       }),
-    }, token);
+    }, tokenRef.current);
     event.currentTarget.reset();
-    await load(token);
+    await load(tokenRef.current);
   }
 
   async function assignService(event: FormEvent<HTMLFormElement>) {
@@ -115,7 +117,7 @@ export default function CatalogPage() {
     const form = new FormData(event.currentTarget);
     const staffId = String(form.get("staff_id"));
     const serviceId = String(form.get("service_id"));
-    await api(`/staff/${staffId}/services/${serviceId}`, { method: "POST" }, token);
+    await api(`/staff/${staffId}/services/${serviceId}`, { method: "POST" }, tokenRef.current);
     setMessage("Услуга назначена сотруднику");
   }
 
