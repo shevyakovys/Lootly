@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     environment: str = "development"
     database_url: str = "postgresql+asyncpg://lootly:lootly@postgres:5432/lootly"
     default_slot_step_minutes: int = 15
+    auth_secret_key: str = "development-only-change-me"
+    auth_access_token_minutes: int = 480
 
 
 @lru_cache

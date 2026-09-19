@@ -251,3 +251,52 @@ class PublicBookingCreate(BaseModel):
         if value.tzinfo is None:
             raise ValueError("start_at must be timezone-aware")
         return value
+
+
+class BootstrapCreate(BaseModel):
+    organization_name: str = Field(min_length=1, max_length=200)
+    organization_slug: str = Field(pattern=r"^[a-z0-9-]+$", min_length=2, max_length=100)
+    email: str = Field(min_length=3, max_length=320)
+    password: str = Field(min_length=10, max_length=200)
+
+
+class LoginRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+    password: str = Field(min_length=1, max_length=200)
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+
+class AdminUserCreate(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+    password: str = Field(min_length=10, max_length=200)
+    role: str
+    staff_id: uuid.UUID | None = None
+
+    @field_validator("role")
+    @classmethod
+    def supported_role(cls, value: str) -> str:
+        if value not in {"owner", "admin", "staff"}:
+            raise ValueError("unsupported role")
+        return value
+
+    @model_validator(mode="after")
+    def staff_role_requires_staff(self) -> AdminUserCreate:
+        if self.role == "staff" and self.staff_id is None:
+            raise ValueError("staff role requires staff_id")
+        return self
+
+
+class AdminUserRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    organization_id: uuid.UUID
+    staff_id: uuid.UUID | None
+    email: str
+    role: str
+    active: bool
+    created_at: datetime
