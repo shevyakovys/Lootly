@@ -173,5 +173,6 @@ class PublicBookingService:
                 start_at=payload.start_at,
                 note=payload.note,
                 booking_key=payload.booking_key,
+                booking_source="public",
             )
         )

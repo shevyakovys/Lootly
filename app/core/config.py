@@ -12,6 +12,10 @@ class Settings(BaseSettings):
     default_slot_step_minutes: int = 15
     auth_secret_key: str = "development-only-change-me"
     auth_access_token_minutes: int = 480
+    notification_webhook_url: str | None = None
+    notification_timeout_seconds: float = 5.0
+    notification_batch_size: int = 100
+    reminder_hours_before: int = 24
 
 
 @lru_cache

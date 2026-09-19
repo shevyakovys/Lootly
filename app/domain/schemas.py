@@ -129,6 +129,14 @@ class AppointmentCreate(BaseModel):
     start_at: datetime
     note: str | None = None
     booking_key: str | None = Field(default=None, max_length=100)
+    booking_source: str = "admin"
+
+    @field_validator("booking_source")
+    @classmethod
+    def supported_booking_source(cls, value: str) -> str:
+        if value not in {"admin", "public"}:
+            raise ValueError("unsupported booking source")
+        return value
 
     @field_validator("start_at")
     @classmethod
@@ -154,6 +162,7 @@ class AppointmentRead(BaseModel):
     status: str
     note: str | None
     booking_key: str | None
+    booking_source: str
     created_at: datetime
 
 
@@ -300,3 +309,66 @@ class AdminUserRead(BaseModel):
     role: str
     active: bool
     created_at: datetime
+
+
+class LocationUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    timezone: str | None = None
+    address: str | None = None
+    active: bool | None = None
+
+    @field_validator("timezone")
+    @classmethod
+    def valid_timezone(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        try:
+            ZoneInfo(value)
+        except ZoneInfoNotFoundError as exc:
+            raise ValueError("unknown IANA timezone") from exc
+        return value
+
+
+class StaffUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    active: bool | None = None
+
+
+class ServiceUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    duration_minutes: int | None = Field(default=None, gt=0, le=1440)
+    price: Decimal | None = Field(default=None, ge=0)
+    active: bool | None = None
+
+
+class CustomerUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    phone: str | None = Field(default=None, min_length=3, max_length=50)
+    email: str | None = Field(default=None, max_length=320)
+    note: str | None = None
+
+
+class NotificationRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    appointment_id: uuid.UUID
+    event_type: str
+    due_at: datetime
+    status: str
+    attempts: int
+    sent_at: datetime | None
+    created_at: datetime
+
+
+class AnalyticsOverview(BaseModel):
+    bookings_created: int
+    public_bookings: int
+    completed: int
+    canceled: int
+    no_show: int
+    cancellation_rate: float
+    no_show_rate: float
+    average_lead_time_hours: float
+    repeat_customer_rate: float
+    notification_delivery_rate: float

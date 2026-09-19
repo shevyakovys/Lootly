@@ -1,0 +1,15 @@
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; font-family: Inter, system-ui, sans-serif; background: #f6f7f9; color: #16181d; }
+a { color: inherit; text-decoration: none; }
+main { max-width: 1120px; margin: 0 auto; padding: 32px 20px; }
+.card { background: white; border: 1px solid #e3e6eb; border-radius: 16px; padding: 20px; box-shadow: 0 6px 24px rgba(20,25,35,.04); }
+.grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+button { border: 0; border-radius: 10px; padding: 10px 14px; background: #111827; color: white; cursor: pointer; }
+button.secondary { background: #e5e7eb; color: #111827; }
+input, select { width: 100%; border: 1px solid #d7dce3; border-radius: 10px; padding: 10px 12px; background: white; }
+label { display: grid; gap: 6px; margin-bottom: 12px; font-size: 14px; }
+nav { display: flex; justify-content: space-between; align-items: center; padding: 18px 20px; background: white; border-bottom: 1px solid #e5e7eb; }
+.metric { font-size: 28px; font-weight: 700; margin-top: 8px; }
+.muted { color: #68707d; }
+.list { display: grid; gap: 10px; }
+.row { display: flex; justify-content: space-between; gap: 16px; padding: 12px 0; border-bottom: 1px solid #eef0f3; }
