@@ -1,4 +1,5 @@
 import "./globals.css";
+import Link from "next/link";
 import type { ReactNode } from "react";
 
 export const metadata = {
@@ -11,11 +12,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="ru">
       <body>
         <nav>
-          <strong><a href="/">Lootly</a></strong>
+          <strong><Link href="/">Lootly</Link></strong>
           <div style={{ display: "flex", gap: 16 }}>
-            <a href="/dashboard">Журнал</a>
-            <a href="/catalog">Справочники</a>
-            <a href="/schedule">Расписание</a>
+            <Link href="/dashboard">Журнал</Link>
+            <Link href="/catalog">Справочники</Link>
+            <Link href="/schedule">Расписание</Link>
           </div>
         </nav>
         {children}
