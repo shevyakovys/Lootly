@@ -8,10 +8,11 @@ from typing import Deque
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import JSONResponse, Response
+from starlette.types import ASGIApp
 
 
 class PublicRateLimitMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app: object, *, limit: int) -> None:
+    def __init__(self, app: ASGIApp, *, limit: int) -> None:
         super().__init__(app)
         self.limit = limit
         self.window_seconds = 60.0
