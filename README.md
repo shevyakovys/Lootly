@@ -64,3 +64,9 @@ SMS/email/messenger gateway.
 - `docs/TECHNICAL_REQUIREMENTS.md`
 - `docs/ARCHITECTURE.md`
 - `AGENTS.md`
+
+
+## Public production deployment
+
+The recommended hosted deployment is Railway. Deployment-specific settings are documented in
+`docs/DEPLOYMENT_RAILWAY.md`.

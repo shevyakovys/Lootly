@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -18,6 +19,15 @@ class Settings(BaseSettings):
     reminder_hours_before: int = 24
     frontend_origin: str = "http://localhost:3000"
     public_rate_limit_per_minute: int = 120
+
+    @field_validator("database_url")
+    @classmethod
+    def normalize_async_postgres_url(cls, value: str) -> str:
+        if value.startswith("postgres://"):
+            return "postgresql+asyncpg://" + value[len("postgres://") :]
+        if value.startswith("postgresql://"):
+            return "postgresql+asyncpg://" + value[len("postgresql://") :]
+        return value
 
 
 @lru_cache
