@@ -165,6 +165,7 @@ async function renderQuickBooking(){
     if(!f.elements.day.value||f.elements.day.value<today)f.elements.day.value=today;
   };
   const loadSlots=async()=>{
+    if(quickMode==="manual"){syncQuickMode();return}
     const staffId=f.elements.staff.value,location=currentLocation(),info=document.querySelector("#quickBookInfo"),submit=document.querySelector("#quickBookSubmit");
     if(!staffId){f.elements.slot.innerHTML='<option value="">Нет доступного сотрудника</option>';submit.disabled=true;return}
     f.elements.slot.disabled=true;f.elements.slot.innerHTML='<option value="">Загрузка…</option>';submit.disabled=true;
