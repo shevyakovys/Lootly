@@ -159,7 +159,7 @@ input:focus,select:focus,textarea:focus{border-color:#4f9f99;box-shadow:0 0 0 3p
   --line-strong:#cdd9eb;
   --brand:#0f766e;
   --brand-2:#0e7490;
-  --brand-soft:#f0edff;
+  --brand-soft:#e7f3f1;
   --success:#07985f;
   --success-soft:#eafaf2;
   --shadow:0 10px 28px rgba(38,59,114,.06);
@@ -203,7 +203,7 @@ h3{font-weight:800}
 .nav-item:hover{background:#edf8f6;color:#0f766e}
 .nav-item.active{
   color:#0f766e;
-  background:linear-gradient(135deg,#f0edff,#f1f9f8);
+  background:linear-gradient(135deg,#e7f3f1,#f1f9f8);
   border-color:#cbe5e2;
   box-shadow:0 5px 16px rgba(15,118,110,.06);
 }
@@ -511,7 +511,7 @@ select:disabled{
   margin-left:7px;
   padding:4px 7px;
   border-radius:999px;
-  background:#f0edff;
+  background:#e7f3f1;
   color:#0f766e;
   font-size:10px;
   font-weight:800;
@@ -539,7 +539,7 @@ select:disabled{
   border-color:#dfe7f2;
 }
 .category-label{
-  background:#f0edff;
+  background:#e7f3f1;
   color:#5c49dd;
 }
 .preview-device{
@@ -1085,7 +1085,7 @@ select{
 .booking-create-card .field-staff>span:before,
 .booking-create-card .field-client>span:before,
 .booking-create-card .field-date>span:before,
-.booking-create-card .field-time>span:before{filter:saturate(.72) hue-rotate(116deg)}
+.booking-create-card .field-time>span:before{filter:none}
 
 /* mobile glass */
 .mobile-top{
