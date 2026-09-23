@@ -84,7 +84,7 @@ async function requireAuth(){const s=await session();if(!s){location.hash="#/log
 function navLink(route,label,ic,active){return '<a class="nav-item '+(active===route?"active":"")+'" href="#/'+route+'"><span class="nav-icon">'+icon(ic)+'</span><span>'+label+'</span></a>'}
 async function shell(route,title,content){
   const p=await profile(),o=await org(),s=await session();
-  app.innerHTML='<div class="app-shell"><aside class="sidebar"><a class="logo" href="#/dashboard"><span class="brand-mark">L</span>Lootly</a><nav class="sidebar-nav">'+
+  app.innerHTML='<div class="app-shell route-'+esc(route)+'"><aside class="sidebar"><a class="logo" href="#/dashboard"><span class="brand-mark">L</span>Lootly</a><nav class="sidebar-nav">'+
     navLink("dashboard","Журнал","dashboard",route)+navLink("calendar","Календарь","calendar",route)+navLink("catalog","Справочники","catalog",route)+navLink("schedule","Расписание","schedule",route)+navLink("widgets","Виджеты","widgets",route)+navLink("settings","Настройки","settings",route)+
     '</nav><div class="sidebar-foot"><div class="profile-mini"><strong>'+esc(o?.name||s?.user?.email)+'</strong><span>'+esc(p?.role||"")+'</span></div><button id="logout" class="btn ghost sm" style="width:100%;margin-top:7px;color:#94a3b8">Выйти</button></div></aside>'+
     '<div class="main"><div class="mobile-top"><a class="logo" href="#/dashboard"><span class="brand-mark">L</span>Lootly</a><span class="muted tiny">'+esc(o?.name||"")+'</span></div><header class="topbar"><div class="breadcrumb">Lootly / '+esc(title)+'</div><div class="top-actions"><a class="btn secondary sm" target="_blank" href="#/book/'+esc(o?.slug||"")+'">Открыть онлайн-запись '+icon("external")+'</a></div></header><main class="page">'+content+'</main>'+
