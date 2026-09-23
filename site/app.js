@@ -423,16 +423,30 @@ async function calendar(){
     const tz=a.locations?.timezone||Intl.DateTimeFormat().resolvedOptions().timeZone;
     const modal=document.createElement("div");
     modal.id="calendarAppointmentModal";modal.className="calendar-modal-backdrop";
-    const actions=manager&&["booked","confirmed"].includes(a.status)
+    const lp=localDateParts(a.start_at,tz);
+    const editable=manager&&["booked","confirmed"].includes(a.status);
+    const reschedule=editable
+      ? '<div class="calendar-reschedule"><div><b>Перенести запись</b><span class="muted tiny">Точное время, независимо от сетки календаря</span></div><div class="grid grid-2"><label class="field"><span>Дата</span><input id="modalMoveDate" type="date" value="'+esc(lp.date)+'"></label><label class="field"><span>Время</span><input id="modalMoveTime" type="time" step="60" value="'+String(lp.hour).padStart(2,"0")+':'+String(lp.minute).padStart(2,"0")+'"></label></div><button class="btn secondary" id="modalMoveSubmit">Перенести</button></div>'
+      : "";
+    const actions=editable
       ? '<div class="calendar-modal-actions"><button class="btn secondary" data-modal-status="confirmed">Подтвердить</button><button class="btn secondary" data-modal-status="completed">Завершить</button><button class="btn danger" data-modal-status="canceled">Отменить</button></div>'
       : "";
-    modal.innerHTML='<div class="calendar-modal" role="dialog" aria-modal="true" aria-labelledby="calendarModalTitle"><div class="spread"><div><span class="status '+esc(a.status)+'">'+esc(statusLabel(a.status))+'</span><h2 id="calendarModalTitle" style="margin:10px 0 4px">'+esc(a.customers?.name||"Клиент")+'</h2><div class="muted">'+esc(a.customers?.phone||"")+'</div></div><button type="button" class="btn ghost" id="calendarModalClose" aria-label="Закрыть">×</button></div><div class="calendar-modal-grid"><div><span>Время</span><b>'+dtZone(a.start_at,tz)+' — '+new Intl.DateTimeFormat("ru-RU",{timeZone:tz,hour:"2-digit",minute:"2-digit"}).format(new Date(a.end_at))+'</b></div><div><span>Длительность</span><b>'+durationLabel(a.duration_minutes)+'</b></div><div><span>Услуга</span><b>'+esc(a.services?.name||"—")+'</b></div><div><span>Сотрудник</span><b>'+esc(a.staff_members?.name||"—")+'</b></div><div><span>Филиал</span><b>'+esc(a.locations?.name||"—")+'</b></div><div><span>Стоимость</span><b>'+money(a.price)+'</b></div></div><div class="cluster"><a class="btn secondary" href="#/client/'+a.customer_id+'">Карточка клиента</a></div>'+actions+'</div>';
+    modal.innerHTML='<div class="calendar-modal" role="dialog" aria-modal="true" aria-labelledby="calendarModalTitle"><div class="spread"><div><span class="status '+esc(a.status)+'">'+esc(statusLabel(a.status))+'</span><h2 id="calendarModalTitle" style="margin:10px 0 4px">'+esc(a.customers?.name||"Клиент")+'</h2><div class="muted">'+esc(a.customers?.phone||"")+'</div></div><button type="button" class="btn ghost" id="calendarModalClose" aria-label="Закрыть">×</button></div><div class="calendar-modal-grid"><div><span>Время</span><b>'+dtZone(a.start_at,tz)+' — '+new Intl.DateTimeFormat("ru-RU",{timeZone:tz,hour:"2-digit",minute:"2-digit"}).format(new Date(a.end_at))+'</b></div><div><span>Длительность</span><b>'+durationLabel(a.duration_minutes)+'</b></div><div><span>Услуга</span><b>'+esc(a.services?.name||"—")+'</b></div><div><span>Сотрудник</span><b>'+esc(a.staff_members?.name||"—")+'</b></div><div><span>Филиал</span><b>'+esc(a.locations?.name||"—")+'</b></div><div><span>Стоимость</span><b>'+money(a.price)+'</b></div></div><div class="cluster"><a class="btn secondary" href="#/client/'+a.customer_id+'">Карточка клиента</a></div>'+reschedule+actions+'</div>';
     document.body.append(modal);
     const close=()=>modal.remove();
     document.querySelector("#calendarModalClose")?.addEventListener("click",close);
     modal.addEventListener("click",e=>{if(e.target===modal)close()});
     const onKey=e=>{if(e.key==="Escape"){close();document.removeEventListener("keydown",onKey)}};
     document.addEventListener("keydown",onKey);
+    document.querySelector("#modalMoveSubmit")?.addEventListener("click",async e=>{
+      const btn=e.currentTarget,date=document.querySelector("#modalMoveDate")?.value,time=document.querySelector("#modalMoveTime")?.value;
+      if(!date||!time)return toast("Укажите дату и время","error");
+      btn.disabled=true;btn.textContent="Переносим…";
+      try{
+        await rpcRetry("reschedule_appointment_local",{p_appointment_id:a.id,p_local_date:date,p_local_time:time},{attempts:1,timeout:10000});
+        toast("Запись перенесена");close();calendar();
+      }catch(err){toast(friendlyError(err),"error");btn.disabled=false;btn.textContent="Перенести"}
+    });
     modal.querySelectorAll("[data-modal-status]").forEach(b=>b.addEventListener("click",async()=>{
       b.disabled=true;
       const {error}=await sb.rpc("set_appointment_status",{p_appointment_id:a.id,p_status:b.dataset.modalStatus});
