@@ -60,7 +60,7 @@ jobs:
         run: |
           node --check ../site/app.js
           node --check ../site/embed.js
-          node -e "const fs=require('fs');const s=fs.readFileSync('../site/app.js','utf8');for(const name of ['addDaysIso','weekStartIso','localDateParts','durationLabel','dtZone','dayZone']){if(!new RegExp('(?:const|function)\\s+'+name+'\\b').test(s))throw new Error('Missing site helper: '+name)}"
+          node -e "const fs=require('fs');const s=fs.readFileSync('../site/app.js','utf8');for(const name of ['addDaysIso','weekStartIso','localDateParts','durationLabel','dtZone','dayZone']){if(!s.includes('const '+name+'=')&&!s.includes('function '+name+'('))throw new Error('Missing site helper: '+name)}"
       - name: Build
         env:
           NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
