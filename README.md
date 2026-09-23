@@ -96,3 +96,24 @@ The active GitHub Pages frontend uses a responsive SaaS shell with:
 - toasts, empty states and clearer validation/error states.
 
 Frontend source is split into `site/index.html`, `site/styles.css`, `site/app.js` and `site/embed.js`.
+
+
+## Calendar, customer profiles and hardened widget
+
+The current hosted UI also includes:
+
+- day/week appointment calendar;
+- timezone-safe drag-and-drop rescheduling;
+- customer profile with visit history, spend and notes;
+- service categories;
+- optional employee image URLs;
+- public widget waitlist when no slots are available;
+- admin waitlist processing on the dashboard;
+- widget network retry/timeout handling and friendly errors;
+- slot-conflict recovery with automatic availability refresh;
+- Shadow DOM isolation for `embed.js`;
+- host-page events: `lootly:ready`, `lootly:booking`, `lootly:error`.
+
+Calendar:
+
+`https://shevyakovys.github.io/Lootly/#/calendar`

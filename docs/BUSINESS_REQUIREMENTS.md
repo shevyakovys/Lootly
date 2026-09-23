@@ -185,3 +185,48 @@ Widget distribution:
 - inline iframe embed;
 - direct booking link;
 - conversion analytics for view/open/booking events.
+
+
+## 12. Calendar, customer profile and waitlist
+
+### Calendar
+- day and week modes;
+- location/staff filters;
+- appointment cards with customer/service/staff context;
+- owner/admin may move active appointments by drag-and-drop;
+- drag-and-drop rescheduling is interpreted in the appointment location timezone;
+- booking availability and overlap rules remain authoritative.
+
+### Customer profile
+- contacts;
+- internal note;
+- total visit count;
+- completed-visit spend;
+- next active visit;
+- visit history.
+
+### Service catalog
+- optional categories;
+- category-aware online booking display;
+- optional staff image URL.
+
+### Waitlist
+When a widget has waitlist enabled and no slots are available, a customer may leave:
+- name;
+- phone;
+- optional email;
+- desired date;
+- optional staff preference.
+
+The dashboard exposes waiting entries to managers. Managers can mark entries contacted or canceled.
+
+### Widget resilience
+The widget must:
+- retry safe read operations after transient network failures;
+- time out stalled requests;
+- never retry booking creation blindly;
+- translate infrastructure errors to customer-facing messages;
+- refresh availability after a concurrent slot conflict;
+- show setup errors separately from temporary network errors;
+- isolate embed styles from host-page CSS;
+- emit integration events to the host page.

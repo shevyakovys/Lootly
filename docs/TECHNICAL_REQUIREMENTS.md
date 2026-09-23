@@ -170,3 +170,43 @@ optional presentation details.
 
 Widget analytics are stored in `booking_widget_events`. Public tracking is idempotent per
 widget/session/event and exposed through rate-limited RPC.
+
+
+## Calendar and customer UX
+
+`reschedule_appointment_local` receives local date/time and resolves it using the appointment
+location IANA timezone before delegating to the existing reschedule invariant checks. Browser timezone
+must not decide the stored appointment time.
+
+## Service catalog extensions
+
+- `service_categories` is organization-scoped and RLS protected.
+- `services.category_id` is optional.
+- `staff_members.avatar_url` is optional presentation data.
+
+## Waitlist
+
+`waitlist_entries` is tenant scoped. Anonymous users cannot write the table directly.
+Widget waitlist creation is available only through `create_public_widget_waitlist`, which revalidates:
+- active widget;
+- widget waitlist setting;
+- widget location/service/staff scope;
+- active location/service/staff relationships;
+- basic contact/date input;
+- public rate limit.
+
+## Embed reliability
+
+`site/embed.js`:
+- runs inside Shadow DOM when supported;
+- has request timeout and bounded retries for safe reads;
+- falls back to a direct booking launcher if config loading fails;
+- tolerates unavailable sessionStorage;
+- communicates iframe lifecycle via `postMessage`;
+- emits browser `CustomEvent` events:
+  - `lootly:ready`
+  - `lootly:booking`
+  - `lootly:error`.
+
+Booking creation is not automatically retried because a lost response could otherwise create
+ambiguous client behavior. A conflict returns the customer to refreshed availability.
