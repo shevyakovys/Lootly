@@ -15,6 +15,15 @@ const day=v=>v?new Date(v).toLocaleDateString("ru-RU",{weekday:"short",day:"nume
 const initials=v=>String(v||"?").trim().split(/\s+/).slice(0,2).map(x=>x[0]?.toUpperCase()).join("");
 const localIsoDate=d=>new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10);
 const todayIso=()=>localIsoDate(new Date());
+const addDaysIso=(iso,days)=>{const d=new Date(iso+"T12:00:00Z");d.setUTCDate(d.getUTCDate()+Number(days||0));return d.toISOString().slice(0,10)};
+const weekStartIso=iso=>{const d=new Date(iso+"T12:00:00Z"),offset=(d.getUTCDay()+6)%7;d.setUTCDate(d.getUTCDate()-offset);return d.toISOString().slice(0,10)};
+const localDateParts=(value,tz)=>{
+  const parts=new Intl.DateTimeFormat("en-CA",{timeZone:tz||"UTC",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(new Date(value));
+  const get=type=>parts.find(x=>x.type===type)?.value;
+  return{date:get("year")+"-"+get("month")+"-"+get("day"),hour:Number(get("hour")||0),minute:Number(get("minute")||0)};
+};
+const dtZone=(value,tz)=>value?new Intl.DateTimeFormat("ru-RU",{timeZone:tz||undefined,day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}).format(new Date(value)):"";
+const dayZone=(value,tz)=>value?new Intl.DateTimeFormat("ru-RU",{timeZone:tz||undefined,weekday:"short",day:"numeric",month:"short"}).format(new Date(value)):"";
 const icon=n=>({dashboard:"⌂",catalog:"▦",schedule:"◫",widgets:"◇",settings:"⚙",plus:"+",calendar:"▣",client:"◎",service:"✦",staff:"♙"}[n]||"•");
 const slugify=(value="")=>{const m={а:"a",б:"b",в:"v",г:"g",д:"d",е:"e",ё:"e",ж:"zh",з:"z",и:"i",й:"y",к:"k",л:"l",м:"m",н:"n",о:"o",п:"p",р:"r",с:"s",т:"t",у:"u",ф:"f",х:"h",ц:"c",ч:"ch",ш:"sh",щ:"sch",ъ:"",ы:"y",ь:"",э:"e",ю:"yu",я:"ya"};return String(value).trim().toLowerCase().split("").map(c=>m[c]??c).join("").replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"").slice(0,100)};
 
