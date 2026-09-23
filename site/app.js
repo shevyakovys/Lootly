@@ -412,7 +412,7 @@ async function calendar(){
     sb.from("appointments").select("*,customers(name,phone),services(name),staff_members(name),locations(name,timezone)").order("start_at",{ascending:true}).limit(500),
     sb.from("staff_members").select("id,name").eq("active",true).order("name"),
     sb.from("locations").select("id,name,timezone").eq("active",true).order("name"),
-    sb.from("working_hours").select("start_time,end_time")
+    sb.from("working_hours").select("staff_id,weekday,start_time,end_time")
   ]);
   const loadError=apptRes.error||staffRes.error||locRes.error||hoursRes.error;
   if(loadError)return shell("calendar","Календарь",'<div class="notice error">'+esc(friendlyError(loadError))+'</div>');
@@ -481,9 +481,43 @@ async function calendar(){
     let html='<div class="cal-head"></div>'+days.map(x=>'<div class="cal-head">'+new Date(x+"T12:00:00").toLocaleDateString("ru-RU",{weekday:"short",day:"numeric",month:"short"})+'</div>').join("");
     for(const hour of hours){
       html+='<div class="cal-time">'+String(hour).padStart(2,"0")+':00</div>';
-      for(const date of days)html+='<div class="cal-cell" data-date="'+date+'" data-hour="'+hour+'">'+sublines+'</div>';
+      for(const date of days){
+        const dateObj=new Date(date+"T12:00:00Z"),weekday=(dateObj.getUTCDay()+6)%7;
+        let availabilityClass="";
+        if(staffFilter){
+          const staffHours=working.filter(x=>x.staff_id===staffFilter&&Number(x.weekday)===weekday);
+          const hourStart=hour*60,hourEnd=(hour+1)*60;
+          const overlaps=staffHours.some(x=>{
+            const [sh,sm]=String(x.start_time).slice(0,5).split(":").map(Number),[eh,em]=String(x.end_time).slice(0,5).split(":").map(Number);
+            return sh*60+sm<hourEnd&&eh*60+em>hourStart;
+          });
+          if(!overlaps)availabilityClass=" cal-unavailable";
+        }
+        html+='<div class="cal-cell'+availabilityClass+'" data-date="'+date+'" data-hour="'+hour+'">'+sublines+'</div>';
+      }
     }
     grid.innerHTML=html;
+    if(staffFilter){
+      for(const date of days){
+        const dateObj=new Date(date+"T12:00:00Z"),weekday=(dateObj.getUTCDay()+6)%7;
+        const staffHours=working.filter(x=>x.staff_id===staffFilter&&Number(x.weekday)===weekday);
+        for(const hour of hours){
+          const cell=grid.querySelector('.cal-cell[data-date="'+date+'"][data-hour="'+hour+'"]');if(!cell)continue;
+          const intervals=staffHours.map(x=>{
+            const [sh,sm]=String(x.start_time).slice(0,5).split(":").map(Number),[eh,em]=String(x.end_time).slice(0,5).split(":").map(Number);
+            return [sh*60+sm,eh*60+em];
+          });
+          const hourStart=hour*60;
+          for(let m=0;m<60;m+=5){
+            const minute=hourStart+m,workingMinute=intervals.some(([a,b])=>minute>=a&&minute<b);
+            if(!workingMinute){
+              const band=document.createElement("span");band.className="cal-off-band";
+              band.style.top=(m/60*100)+"%";band.style.height=(5/60*100)+"%";cell.append(band);
+            }
+          }
+        }
+      }
+    }
 
     const filtered=all.filter(a=>(!staffFilter||a.staff_id===staffFilter)&&(!locationFilter||a.location_id===locationFilter));
     const visible=filtered.map(a=>{
@@ -546,10 +580,11 @@ async function calendar(){
       }));
       grid.querySelectorAll(".cal-event[draggable=true]").forEach(ev=>ev.addEventListener("dragend",()=>{ev.classList.remove("dragging");setTimeout(()=>{suppressEventClick=false},120)}));
       grid.querySelectorAll(".cal-cell").forEach(cell=>{
-        cell.addEventListener("dragover",e=>{e.preventDefault();cell.classList.add("drag-over")});
+        cell.addEventListener("dragover",e=>{if(cell.classList.contains("cal-unavailable"))return;e.preventDefault();cell.classList.add("drag-over")});
         cell.addEventListener("dragleave",()=>cell.classList.remove("drag-over"));
         cell.addEventListener("drop",async e=>{
           e.preventDefault();cell.classList.remove("drag-over");
+          if(cell.classList.contains("cal-unavailable"))return toast("У сотрудника в это время нет рабочего интервала","error");
           let payload={id:"",grabMinutes:0};
           try{payload=JSON.parse(e.dataTransfer.getData("text/plain"))}catch{payload.id=e.dataTransfer.getData("text/plain")}
           if(!payload.id)return;
