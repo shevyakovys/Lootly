@@ -1121,3 +1121,219 @@ select{
 @media(prefers-reduced-motion:reduce){
   *,*:before,*:after{scroll-behavior:auto!important;transition:none!important;animation:none!important}
 }
+
+
+/* Route-level glass polish */
+.btn .ui-icon{width:17px;height:17px;flex:0 0 17px}
+.btn.sm .ui-icon{width:15px;height:15px}
+.top-actions .ui-icon{width:15px;height:15px}
+.checkdot .ui-icon{width:15px;height:15px}
+.check-pending{width:6px;height:6px;border-radius:50%;background:rgba(191,219,216,.7)}
+.any-staff-avatar .ui-icon{width:18px;height:18px}
+
+/* dashboard */
+.route-dashboard .page-head{align-items:center}
+.route-dashboard .metric-card{
+  min-height:126px;
+  position:relative;
+  overflow:hidden;
+}
+.route-dashboard .metric-card:after{
+  content:"";
+  position:absolute;
+  width:82px;height:82px;
+  right:-28px;top:-30px;
+  border-radius:50%;
+  background:radial-gradient(circle,rgba(14,116,144,.10),transparent 68%);
+  pointer-events:none;
+}
+.route-dashboard .quick a{min-height:84px;display:flex;flex-direction:column;justify-content:space-between}
+.route-dashboard .quick span{color:#70868c}
+.route-dashboard .quick b{color:#173740}
+
+/* catalog */
+.route-catalog .tabs{
+  position:sticky;
+  top:80px;
+  z-index:8;
+  box-shadow:0 10px 28px rgba(31,64,72,.055);
+}
+.route-catalog #catalogPane>.card,
+.route-catalog #catalogPane>.grid>.card,
+.route-catalog #catalogPane>.grid>form.card{
+  background:linear-gradient(145deg,rgba(255,255,255,.72),rgba(247,252,251,.47));
+}
+.route-catalog #entityList{
+  display:grid;
+  gap:5px;
+}
+.route-catalog #entityList>.spread{
+  padding:13px 12px!important;
+  margin:0 -4px;
+  border-bottom:0!important;
+  border-radius:14px;
+  transition:background .15s,border-color .15s,transform .15s;
+  border:1px solid transparent;
+}
+.route-catalog #entityList>.spread:hover{
+  background:rgba(255,255,255,.48);
+  border-color:rgba(121,157,163,.14);
+  transform:translateX(1px);
+}
+.route-catalog .service-row .cluster{gap:7px}
+.route-catalog #addEntity,
+.route-catalog #categoryForm,
+.route-catalog #assignService{
+  position:relative;
+  overflow:hidden;
+}
+.route-catalog #addEntity:before,
+.route-catalog #categoryForm:before,
+.route-catalog #assignService:before{
+  content:"";
+  position:absolute;
+  width:130px;height:130px;
+  right:-65px;top:-70px;
+  border-radius:50%;
+  background:radial-gradient(circle,rgba(15,118,110,.075),transparent 70%);
+  pointer-events:none;
+}
+
+/* schedule */
+.route-schedule #staffSelector{
+  gap:10px;
+}
+.route-schedule #staffSelector .card{
+  padding:14px 15px;
+  border-radius:16px;
+  box-shadow:none;
+  background:rgba(255,255,255,.42);
+  transition:transform .16s,border-color .16s,background .16s,box-shadow .16s;
+}
+.route-schedule #staffSelector .card:hover{
+  transform:translateY(-1px);
+  border-color:rgba(15,118,110,.25);
+  background:rgba(255,255,255,.66);
+}
+.route-schedule #staffSelector .card.soft{
+  border-color:rgba(15,118,110,.34);
+  background:linear-gradient(145deg,rgba(255,255,255,.82),rgba(223,243,240,.60));
+  box-shadow:0 9px 24px rgba(31,64,72,.07);
+}
+.route-schedule .schedule-day{
+  padding:13px 2px;
+}
+.route-schedule .schedule-interval{
+  min-height:40px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.65);
+}
+.route-schedule #hoursForm,
+.route-schedule #offForm{
+  background:linear-gradient(145deg,rgba(255,255,255,.74),rgba(247,252,251,.48));
+}
+
+/* calendar */
+.route-calendar .calendar-toolbar{
+  position:sticky;
+  top:78px;
+  z-index:9;
+  box-shadow:0 12px 32px rgba(31,64,72,.055);
+}
+.route-calendar .calendar-toolbar select{
+  min-height:40px;
+}
+.route-calendar .calendar-grid{
+  overflow:auto;
+  scrollbar-color:rgba(93,135,141,.34) transparent;
+}
+.route-calendar .cal-head{
+  backdrop-filter:blur(14px);
+  -webkit-backdrop-filter:blur(14px);
+}
+.route-calendar .cal-event:hover{
+  filter:brightness(1.015);
+  box-shadow:0 10px 24px rgba(31,64,72,.12);
+}
+
+/* widgets */
+.route-widgets .widget-builder>.stack>.card,
+.route-widgets .widget-builder>.stack>section.card{
+  background:linear-gradient(145deg,rgba(255,255,255,.73),rgba(246,252,251,.47));
+}
+.route-widgets .builder-section{
+  border-color:rgba(126,159,166,.13);
+}
+.route-widgets .builder-footer{
+  border-color:rgba(126,159,166,.16);
+}
+.route-widgets .scope-pill{
+  transition:border-color .15s,background .15s,transform .15s;
+}
+.route-widgets .scope-pill:hover{
+  border-color:rgba(15,118,110,.24);
+  background:rgba(255,255,255,.72);
+  transform:translateY(-1px);
+}
+.route-widgets .codebox{
+  border-radius:15px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05);
+}
+.route-widgets .preview-device{
+  border-radius:30px;
+}
+
+/* settings */
+.route-settings .page>.card,
+.route-settings .page>.grid>.card{
+  background:linear-gradient(145deg,rgba(255,255,255,.73),rgba(247,252,251,.46));
+}
+.route-settings .interval-presets{margin-top:10px}
+.route-settings .interval-preset{min-width:39px}
+
+/* generic profile/client/detail surfaces */
+.client-hero{
+  padding:4px 2px;
+}
+.client-avatar{
+  box-shadow:0 9px 24px rgba(31,64,72,.08),inset 0 1px 0 rgba(255,255,255,.66);
+}
+.stat-box{
+  border-radius:15px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.55);
+}
+
+/* public booking */
+.booking-card .option .person{align-items:center}
+.booking-card .staff-photo{border-color:rgba(15,118,110,.12)}
+.booking-card .booking-actions{
+  position:sticky;
+  bottom:0;
+  padding-top:12px;
+  background:linear-gradient(to top,rgba(249,253,252,.96) 62%,rgba(249,253,252,0));
+  z-index:4;
+}
+.booking-card .slot{
+  min-height:43px;
+  transition:transform .14s,background .14s,border-color .14s;
+}
+.booking-card .slot:hover{transform:translateY(-1px)}
+.booking-card .date-chip{transition:transform .14s,background .14s,border-color .14s}
+.booking-card .date-chip:hover{transform:translateY(-1px)}
+
+/* scrollbars */
+*{scrollbar-width:thin;scrollbar-color:rgba(87,129,136,.28) transparent}
+*::-webkit-scrollbar{width:9px;height:9px}
+*::-webkit-scrollbar-track{background:transparent}
+*::-webkit-scrollbar-thumb{background:rgba(87,129,136,.24);border-radius:999px;border:2px solid transparent;background-clip:padding-box}
+*::-webkit-scrollbar-thumb:hover{background:rgba(87,129,136,.38);border:2px solid transparent;background-clip:padding-box}
+
+@media(max-width:1020px){
+  .route-catalog .tabs,.route-calendar .calendar-toolbar{top:66px}
+}
+@media(max-width:760px){
+  .route-catalog .tabs{top:66px;max-width:100%;width:100%}
+  .route-catalog .tab{flex:1;white-space:nowrap}
+  .route-schedule #staffSelector{grid-template-columns:1fr}
+  .route-calendar .calendar-toolbar{position:relative;top:auto}
+  .route-dashboard .metric-card{min-height:auto}
+}
