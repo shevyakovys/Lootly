@@ -372,18 +372,26 @@ async function catalog(){
         };
         assignmentForm?.elements.staff.addEventListener("change",syncAssignment);
         assignmentForm?.elements.service.addEventListener("change",syncAssignment);
-        assignmentForm?.elements.duration_mode.addEventListener("change",()=>{
+        const refreshDurationDraft=({seedFromService=false}={})=>{
+          if(!assignmentForm)return;
           const custom=assignmentForm.elements.duration_mode.value==="custom";
-          const fields=document.querySelector("#staffDurationFields");
           const service=data.services.find(x=>x.id===assignmentForm.elements.service.value);
+          const staffId=assignmentForm.elements.staff.value;
+          const fields=document.querySelector("#staffDurationFields"),hint=document.querySelector("#staffServiceHint");
           fields?.classList.toggle("is-default",!custom);
           fields?.querySelectorAll("input,select").forEach(el=>el.disabled=!custom);
-          if(custom&&service){
+          if(custom&&service&&seedFromService){
             assignmentForm.elements.duration_hours.value=String(Math.floor(Number(service.duration_minutes||60)/60));
             assignmentForm.elements.duration_minutes_part.value=String(Number(service.duration_minutes||60)%60);
           }
-          syncAssignment();
-        });
+          const draft=custom
+            ? Number(assignmentForm.elements.duration_hours.value||0)*60+Number(assignmentForm.elements.duration_minutes_part.value||0)
+            : Number(service?.duration_minutes||0);
+          if(hint)hint.innerHTML='<div><span>Фактическая длительность</span><b>'+durationLabel(draft)+'</b></div><small>'+(custom?"Индивидуально для "+esc(data.staff.find(x=>x.id===staffId)?.name||"сотрудника"):"Используется длительность услуги")+'</small>';
+        };
+        assignmentForm?.elements.duration_mode.addEventListener("change",()=>refreshDurationDraft({seedFromService:true}));
+        assignmentForm?.elements.duration_hours.addEventListener("input",()=>refreshDurationDraft());
+        assignmentForm?.elements.duration_minutes_part.addEventListener("change",()=>refreshDurationDraft());
         assignmentForm?.addEventListener("submit",async e=>{
           e.preventDefault();const f=new FormData(e.currentTarget);
           let override=null;
