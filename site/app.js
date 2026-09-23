@@ -349,23 +349,162 @@ async function settings(){
 async function publicWidget(key){return bookingExperience({widgetKey:key})}
 async function publicBook(slug){return bookingExperience({slug})}
 async function bookingExperience({widgetKey=null,slug=null}){
-  app.innerHTML='<div class="booking-shell"><div class="booking-card"><div class="booking-head"><div class="muted tiny">LOOTLY</div><h2>Загрузка онлайн-записи…</h2></div></div></div>';
-  let data,error;if(widgetKey)({data,error}=await sb.rpc("get_public_widget",{p_public_key:widgetKey}));else({data,error}=await sb.rpc("get_public_catalog",{p_slug:slug}));
-  if(error||!data){app.innerHTML='<div class="booking-shell"><div class="booking-card"><div class="booking-body" style="padding-top:28px">'+emptyState("Форма недоступна",error?.message||"Проверьте ссылку.")+'</div></div></div>';return}
-  const cfg=widgetKey?data.widget:{title:data.organization.name,subtitle:"Онлайн-запись",primary_color:"#5b5cf0",show_staff_step:true,allow_any_staff:true,show_branding:true,step_order:["location","service","staff","datetime"]},locs=data.locations||[],services=data.services||[];
-  const sessionKey="lootly_"+(widgetKey||data.organization.slug);let sk=sessionStorage.getItem(sessionKey);if(!sk){sk=crypto.randomUUID();sessionStorage.setItem(sessionKey,sk)}if(widgetKey)sb.rpc("track_widget_event",{p_public_key:widgetKey,p_session_key:sk,p_event_type:"view"});else sb.rpc("track_public_booking_view",{p_slug:data.organization.slug,p_session_key:sk});
-  const state={location:locs.length===1?locs[0]:null,service:services.length===1?services[0]:null,staff:null,staffList:[],date:todayIso(),slots:[],slot:null,index:0};
-  let steps=(cfg.step_order||["location","service","staff","datetime"]).filter(x=>x!=="staff"||cfg.show_staff_step);steps=steps.filter((x,i,a)=>a.indexOf(x)===i);["location","service","datetime"].forEach(x=>{if(!steps.includes(x))steps.push(x)});steps.push("contact");
-  async function staffLoad(){if(!state.location||!state.service)return;const r=widgetKey?await sb.rpc("get_public_widget_staff",{p_public_key:widgetKey,p_location_id:state.location.id,p_service_id:state.service.id}):await sb.rpc("get_public_staff",{p_slug:data.organization.slug,p_location_id:state.location.id,p_service_id:state.service.id});if(r.error)throw r.error;state.staffList=r.data||[]}
-  async function slotsLoad(){if(!state.location||!state.service)return;const args=widgetKey?{p_public_key:widgetKey,p_location_id:state.location.id,p_service_id:state.service.id,p_day:state.date,p_staff_id:state.staff?.id||null}:{p_slug:data.organization.slug,p_location_id:state.location.id,p_service_id:state.service.id,p_day:state.date,p_staff_id:state.staff?.id||null};const r=widgetKey?await sb.rpc("get_public_widget_availability",args):await sb.rpc("get_public_availability",args);if(r.error)throw r.error;state.slots=r.data||[];state.slot=null}
+  const initial=()=>{app.innerHTML='<div class="booking-shell"><div class="booking-card"><div class="booking-head"><div class="skeleton" style="width:70px;height:12px"></div><div class="skeleton" style="width:55%;height:28px;margin-top:12px"></div></div><div class="booking-body"><div class="skeleton" style="height:4px;margin:8px 0 26px"></div><div class="skeleton" style="height:72px;margin-bottom:10px"></div><div class="skeleton" style="height:72px"></div></div></div></div>'};
+  const showError=(title,text,retry=true)=>{app.innerHTML='<div class="booking-shell"><div class="booking-card"><div class="widget-error"><div class="widget-error-icon">!</div><h2>'+esc(title)+'</h2><p class="muted">'+esc(text)+'</p>'+(retry?'<button class="btn secondary" id="widgetRetry">Попробовать снова</button>':'')+'</div></div></div>';if(retry)document.querySelector("#widgetRetry")?.addEventListener("click",()=>bookingExperience({widgetKey,slug}))};
+  initial();
+
+  let data;
+  try{
+    data=widgetKey
+      ? await rpcRetry("get_public_widget",{p_public_key:widgetKey},{attempts:3,timeout:8000})
+      : await rpcRetry("get_public_catalog",{p_slug:slug},{attempts:3,timeout:8000});
+  }catch(err){
+    if(widgetKey)window.parent?.postMessage({type:"lootly:error",stage:"init",message:friendlyError(err),widgetKey},"*");
+    showError("Не удалось открыть запись",friendlyError(err),true);return;
+  }
+  if(!data){showError("Форма недоступна","Проверьте ссылку или попробуйте позже.",true);return}
+
+  const cfg=widgetKey?data.widget:{title:data.organization.name,subtitle:"Онлайн-запись",primary_color:"#5b5cf0",show_staff_step:true,allow_any_staff:true,show_branding:true,waitlist_enabled:false,step_order:["location","service","staff","datetime"]};
+  const locs=data.locations||[],services=data.services||[];
+  if(!locs.length){showError("Запись ещё не настроена","У бизнеса пока нет активного филиала для онлайн-записи.",false);return}
+  if(!services.length){showError("Запись ещё не настроена","У бизнеса пока нет активных услуг для онлайн-записи.",false);return}
+
+  const sessionKey="lootly_"+(widgetKey||data.organization.slug);
+  let sk=sessionStorage.getItem(sessionKey);if(!sk){sk=crypto.randomUUID();sessionStorage.setItem(sessionKey,sk)}
+  if(widgetKey)rpcRetry("track_widget_event",{p_public_key:widgetKey,p_session_key:sk,p_event_type:"view"},{attempts:1,timeout:4000}).catch(()=>{});
+  else rpcRetry("track_public_booking_view",{p_slug:data.organization.slug,p_session_key:sk},{attempts:1,timeout:4000}).catch(()=>{});
+  if(widgetKey)window.parent?.postMessage({type:"lootly:ready",widgetKey},"*");
+
+  const state={
+    location:locs.length===1?locs[0]:null,
+    service:services.length===1?services[0]:null,
+    staff:null,staffList:[],date:todayIso(),slots:[],slot:null,index:0,busy:false,loadError:null
+  };
+
+  let steps=(cfg.step_order||["location","service","staff","datetime"]).filter(x=>x!=="staff"||cfg.show_staff_step);
+  steps=steps.filter((x,i,a)=>a.indexOf(x)===i);
+  ["location","service","datetime"].forEach(x=>{if(!steps.includes(x))steps.push(x)});
+  if(locs.length===1)steps=steps.filter(x=>x!=="location");
+  if(services.length===1)steps=steps.filter(x=>x!=="service");
+  steps.push("contact");
+
+  async function staffLoad(){
+    if(!state.location||!state.service)return;
+    state.loadError=null;
+    try{
+      state.staffList=widgetKey
+        ? await rpcRetry("get_public_widget_staff",{p_public_key:widgetKey,p_location_id:state.location.id,p_service_id:state.service.id},{attempts:2})
+        : await rpcRetry("get_public_staff",{p_slug:data.organization.slug,p_location_id:state.location.id,p_service_id:state.service.id},{attempts:2});
+    }catch(err){state.loadError=friendlyError(err);throw err}
+  }
+  async function slotsLoad(){
+    if(!state.location||!state.service)return;
+    state.loadError=null;state.slot=null;
+    const args=widgetKey
+      ? {p_public_key:widgetKey,p_location_id:state.location.id,p_service_id:state.service.id,p_day:state.date,p_staff_id:state.staff?.id||null}
+      : {p_slug:data.organization.slug,p_location_id:state.location.id,p_service_id:state.service.id,p_day:state.date,p_staff_id:state.staff?.id||null};
+    try{
+      state.slots=widgetKey
+        ? await rpcRetry("get_public_widget_availability",args,{attempts:2})
+        : await rpcRetry("get_public_availability",args,{attempts:2});
+    }catch(err){state.loadError=friendlyError(err);state.slots=[];throw err}
+  }
   const dateChips=()=>Array.from({length:7},(_,i)=>{const x=new Date();x.setDate(x.getDate()+i);const iso=x.toISOString().slice(0,10);return '<button type="button" class="date-chip '+(state.date===iso?"active":"")+'" data-date="'+iso+'"><span>'+x.toLocaleDateString("ru-RU",{weekday:"short"})+'</span><b>'+x.getDate()+'</b></button>'}).join("");
-  async function render(){const step=steps[state.index];if(step==="staff"&&state.location&&state.service&&!state.staffList.length)await staffLoad();if(step==="datetime"&&state.location&&state.service&&!state.slots.length)await slotsLoad();let body="";if(step==="location")body='<div class="option-grid">'+locs.map(x=>'<button class="option '+(state.location?.id===x.id?"active":"")+'" data-location="'+x.id+'"><b>'+esc(x.name)+'</b><small>'+esc(x.address||"")+'</small></button>').join("")+'</div>';if(step==="service")body='<div class="option-grid">'+services.map(x=>'<button class="option '+(state.service?.id===x.id?"active":"")+'" data-service="'+x.id+'"><b>'+esc(x.name)+'</b><small>'+x.duration_minutes+' мин · '+money(x.price)+'</small></button>').join("")+'</div>';if(step==="staff")body='<div class="option-grid">'+(cfg.allow_any_staff?'<button class="option '+(!state.staff?"active":"")+'" data-staff=""><b>Любой специалист</b><small>Подберём ближайшее время</small></button>':"")+state.staffList.map(x=>'<button class="option '+(state.staff?.id===x.id?"active":"")+'" data-staff="'+x.id+'"><b>'+esc(x.name)+'</b><small>Специалист</small></button>').join("")+'</div>';if(step==="datetime")body='<div class="date-strip">'+dateChips()+'</div><div class="slot-grid">'+(state.slots.length?state.slots.map((x,i)=>'<button class="slot '+(state.slot===i?"active":"")+'" data-slot="'+i+'">'+new Date(x.start_at).toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"})+'</button>').join(""):'<div class="muted" style="grid-column:1/-1;padding:20px 0">На этот день свободных окон нет. Выберите другую дату.</div>')+'</div>';if(step==="contact"){const chosen=state.slots[state.slot];body='<form id="contactForm" class="stack"><div class="summary"><b>'+esc(state.service?.name||"")+'</b><div class="muted tiny" style="margin-top:4px">'+esc(state.location?.name||"")+' · '+(chosen?dt(chosen.start_at):"")+'</div></div><label class="field"><span>Ваше имя</span><input name="name" autocomplete="name" required></label><label class="field"><span>Телефон</span><input name="phone" autocomplete="tel" required></label><label class="field"><span>Email <span class="muted">(необязательно)</span></span><input name="email" type="email" autocomplete="email"></label><button class="btn brand" style="background:'+cfg.primary_color+'">Подтвердить запись</button><div id="bookResult"></div></form>'}
-    const titles={location:"Выберите филиал",service:"Выберите услугу",staff:"К кому записаться?",datetime:"Выберите время",contact:"Контактные данные"},subs={location:"Где вам удобнее?",service:"Что хотите записать?",staff:"Можно выбрать конкретного специалиста или любого доступного.",datetime:"Показываем только реально свободные окна.",contact:"Остался последний шаг."};
-    app.innerHTML='<div class="booking-shell" style="--accent:'+esc(cfg.primary_color)+'"><div class="booking-card"><div class="booking-head"><div class="spread"><div><div class="tiny muted">'+esc(data.organization.name)+'</div><h2 style="margin:5px 0 0">'+esc(cfg.title||"Онлайн-запись")+'</h2></div><span class="tiny muted">'+(state.index+1)+'/'+steps.length+'</span></div><p class="muted tiny" style="margin-top:7px">'+esc(cfg.subtitle||"")+'</p></div><div class="stepbar"><span style="width:'+Math.round((state.index+1)/steps.length*100)+'%"></span></div><div class="booking-body"><div style="padding-top:22px"><h2>'+titles[step]+'</h2><p class="muted">'+subs[step]+'</p>'+body+'</div>'+(step!=="contact"?'<div class="booking-actions">'+(state.index?'<button class="btn secondary" id="back">Назад</button>':'<span></span>')+'<button class="btn brand" id="next" style="background:'+cfg.primary_color+'">Продолжить</button></div>':'')+(cfg.show_branding?'<div class="tiny muted" style="text-align:center;margin-top:24px">Powered by Lootly</div>':'')+'</div></div></div>';
-    document.querySelector("#back")?.addEventListener("click",()=>{state.index--;render()});document.querySelectorAll("[data-location]").forEach(b=>b.addEventListener("click",()=>{state.location=locs.find(x=>x.id===b.dataset.location);state.staff=null;state.staffList=[];state.slots=[];render()}));document.querySelectorAll("[data-service]").forEach(b=>b.addEventListener("click",()=>{state.service=services.find(x=>x.id===b.dataset.service);state.staff=null;state.staffList=[];state.slots=[];render()}));document.querySelectorAll("[data-staff]").forEach(b=>b.addEventListener("click",()=>{state.staff=b.dataset.staff?state.staffList.find(x=>x.id===b.dataset.staff):null;state.slots=[];render()}));document.querySelectorAll("[data-date]").forEach(b=>b.addEventListener("click",async()=>{state.date=b.dataset.date;state.slots=[];await slotsLoad();render()}));document.querySelectorAll("[data-slot]").forEach(b=>b.addEventListener("click",()=>{state.slot=Number(b.dataset.slot);render()}));
-    document.querySelector("#next")?.addEventListener("click",async()=>{if(step==="location"&&!state.location)return toast("Выберите филиал","error");if(step==="service"&&!state.service)return toast("Выберите услугу","error");if(step==="staff"&&!cfg.allow_any_staff&&!state.staff)return toast("Выберите специалиста","error");if(step==="datetime"&&state.slot===null)return toast("Выберите время","error");state.index++;render()});
-    document.querySelector("#contactForm")?.addEventListener("submit",async e=>{e.preventDefault();const fd=new FormData(e.currentTarget),chosen=state.slots[state.slot],staffId=state.staff?.id||chosen?.staff_id;if(!chosen)return;const args=widgetKey?{p_public_key:widgetKey,p_location_id:state.location.id,p_service_id:state.service.id,p_staff_id:staffId,p_start_at:chosen.start_at,p_customer_name:fd.get("name"),p_customer_phone:fd.get("phone"),p_customer_email:fd.get("email")||null,p_note:null,p_booking_key:crypto.randomUUID()}:{p_slug:data.organization.slug,p_location_id:state.location.id,p_service_id:state.service.id,p_staff_id:staffId,p_start_at:chosen.start_at,p_customer_name:fd.get("name"),p_customer_phone:fd.get("phone"),p_customer_email:fd.get("email")||null,p_note:null,p_booking_key:crypto.randomUUID()};const r=widgetKey?await sb.rpc("create_public_widget_booking",args):await sb.rpc("create_public_booking",args);if(r.error){document.querySelector("#bookResult").innerHTML='<div class="notice error">'+esc(r.error.message)+'</div>';state.slots=[];return}if(widgetKey)sb.rpc("track_widget_event",{p_public_key:widgetKey,p_session_key:sk,p_event_type:"booking"});app.innerHTML='<div class="booking-shell" style="--accent:'+esc(cfg.primary_color)+'"><div class="booking-card"><div class="booking-body" style="padding-top:60px;text-align:center"><div style="width:64px;height:64px;border-radius:50%;background:var(--success-soft);color:var(--success);display:grid;place-items:center;font-size:30px;margin:0 auto 18px">✓</div><h1>Вы записаны</h1><p class="muted">'+esc(state.service.name)+' · '+dt(r.data.start_at)+'</p><div class="summary" style="margin-top:22px;text-align:left"><b>'+esc(data.organization.name)+'</b><div class="muted tiny" style="margin-top:5px">'+esc(state.location.name)+'</div></div>'+(cfg.show_branding?'<div class="tiny muted" style="margin-top:26px">Powered by Lootly</div>':'')+'</div></div></div>'});
-  }render();
+  const staffVisual=x=>x.avatar_url?'<img class="staff-photo" src="'+esc(x.avatar_url)+'" alt="" loading="lazy">':'<span class="avatar">'+initials(x.name)+'</span>';
+  const groupedServices=()=>{
+    const groups=new Map();
+    services.forEach(s=>{const key=s.category_name||"Услуги";if(!groups.has(key))groups.set(key,[]);groups.get(key).push(s)});
+    return [...groups.entries()].map(([name,items])=>'<div style="margin-bottom:18px"><div class="tiny muted" style="font-weight:800;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">'+esc(name)+'</div><div class="option-grid">'+items.map(x=>'<button type="button" class="option '+(state.service?.id===x.id?"active":"")+'" data-service="'+x.id+'"><b>'+esc(x.name)+'</b><small>'+x.duration_minutes+' мин · '+money(x.price)+'</small></button>').join("")+'</div></div>').join("");
+  };
+
+  async function render(){
+    const step=steps[state.index];
+    try{
+      if(step==="staff"&&state.location&&state.service&&!state.staffList.length)await staffLoad();
+      if(step==="datetime"&&state.location&&state.service&&!state.slots.length&&!state.loadError)await slotsLoad();
+    }catch(err){/* render localized error below */}
+
+    let body="";
+    if(step==="location"){
+      body='<div class="option-grid">'+locs.map(x=>'<button type="button" class="option '+(state.location?.id===x.id?"active":"")+'" data-location="'+x.id+'"><b>'+esc(x.name)+'</b><small>'+esc(x.address||"Адрес не указан")+'</small></button>').join("")+'</div>';
+    }
+    if(step==="service")body=groupedServices();
+    if(step==="staff"){
+      if(state.loadError)body='<div class="notice error">'+esc(state.loadError)+'</div><button type="button" class="btn secondary" id="retryStaff">Повторить</button>';
+      else body='<div class="option-grid">'+(cfg.allow_any_staff?'<button type="button" class="option '+(!state.staff?"active":"")+'" data-staff=""><div class="person"><span class="avatar">★</span><div><b>Любой специалист</b><small>Подберём ближайшее время</small></div></div></button>':"")+state.staffList.map(x=>'<button type="button" class="option '+(state.staff?.id===x.id?"active":"")+'" data-staff="'+x.id+'"><div class="person">'+staffVisual(x)+'<div><b>'+esc(x.name)+'</b><small>Специалист</small></div></div></button>').join("")+'</div>';
+    }
+    if(step==="datetime"){
+      let slotsPart="";
+      if(state.loadError)slotsPart='<div class="notice error">'+esc(state.loadError)+'</div><button type="button" class="btn secondary" id="retrySlots">Повторить загрузку</button>';
+      else if(state.slots.length)slotsPart='<div class="slot-grid">'+state.slots.map((x,i)=>'<button type="button" class="slot '+(state.slot===i?"active":"")+'" data-slot="'+i+'">'+new Date(x.start_at).toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"})+'</button>').join("")+'</div>';
+      else slotsPart='<div class="muted" style="padding:18px 0">На этот день свободных окон нет.</div>'+(widgetKey&&cfg.waitlist_enabled?'<div class="waitlist-box"><b>Хотите, чтобы вам написали при появлении окна?</b><p class="muted tiny">Оставьте контакты — заявка попадёт администратору.</p><form id="waitlistForm" class="stack"><input name="name" placeholder="Имя" required><input name="phone" type="tel" placeholder="Телефон" required><input name="email" type="email" placeholder="Email — необязательно"><button class="btn secondary">Встать в лист ожидания</button><div id="waitlistResult"></div></form></div>':"";
+      body='<div class="date-strip">'+dateChips()+'</div>'+slotsPart;
+    }
+    if(step==="contact"){
+      const chosen=state.slots[state.slot];
+      body='<form id="contactForm" class="stack"><div class="summary"><b>'+esc(state.service?.name||"")+'</b><div class="muted tiny" style="margin-top:4px">'+esc(state.location?.name||"")+' · '+(chosen?dt(chosen.start_at):"")+(state.staff?" · "+esc(state.staff.name):"")+'</div></div><label class="field"><span>Ваше имя</span><input name="name" autocomplete="name" required></label><label class="field"><span>Телефон</span><input name="phone" type="tel" autocomplete="tel" required></label><label class="field"><span>Email <span class="muted">(необязательно)</span></span><input name="email" type="email" autocomplete="email"></label><button class="btn brand" id="bookSubmit" style="background:'+cfg.primary_color+'">Подтвердить запись</button><div id="bookResult"></div></form>';
+    }
+
+    const titles={location:"Выберите филиал",service:"Выберите услугу",staff:"К кому записаться?",datetime:"Выберите время",contact:"Контактные данные"};
+    const subs={location:"Где вам удобнее?",service:"Что хотите записать?",staff:"Можно выбрать специалиста или ближайшее доступное время.",datetime:"Показываем только реально свободные окна.",contact:"Проверьте детали и подтвердите запись."};
+    app.innerHTML='<div class="booking-shell" style="--accent:'+esc(cfg.primary_color)+'"><div class="booking-card"><div class="booking-head"><div class="spread"><div><div class="tiny muted">'+esc(data.organization.name)+'</div><h2 style="margin:5px 0 0">'+esc(cfg.title||"Онлайн-запись")+'</h2></div><span class="tiny muted">'+(state.index+1)+'/'+steps.length+'</span></div><p class="muted tiny" style="margin-top:7px">'+esc(cfg.subtitle||"")+'</p></div><div class="stepbar"><span style="width:'+Math.round((state.index+1)/steps.length*100)+'%"></span></div><div class="booking-body"><div style="padding-top:22px"><h2>'+titles[step]+'</h2><p class="muted">'+subs[step]+'</p>'+body+'</div>'+(step!=="contact"?'<div class="booking-actions">'+(state.index?'<button class="btn secondary" id="back">Назад</button>':'<span></span>')+'<button class="btn brand" id="next" style="background:'+cfg.primary_color+'" '+((step==="datetime"&&!state.slots.length)?"disabled":"")+'>Продолжить</button></div>':'')+(cfg.show_branding?'<div class="tiny muted" style="text-align:center;margin-top:24px">Powered by Lootly</div>':'')+'</div></div></div>';
+
+    document.querySelector("#back")?.addEventListener("click",()=>{state.index=Math.max(0,state.index-1);state.loadError=null;render()});
+    document.querySelectorAll("[data-location]").forEach(b=>b.addEventListener("click",()=>{state.location=locs.find(x=>x.id===b.dataset.location);state.staff=null;state.staffList=[];state.slots=[];state.loadError=null;render()}));
+    document.querySelectorAll("[data-service]").forEach(b=>b.addEventListener("click",()=>{state.service=services.find(x=>x.id===b.dataset.service);state.staff=null;state.staffList=[];state.slots=[];state.loadError=null;render()}));
+    document.querySelectorAll("[data-staff]").forEach(b=>b.addEventListener("click",()=>{state.staff=b.dataset.staff?state.staffList.find(x=>x.id===b.dataset.staff):null;state.slots=[];state.loadError=null;render()}));
+    document.querySelectorAll("[data-date]").forEach(b=>b.addEventListener("click",async()=>{state.date=b.dataset.date;state.slots=[];state.loadError=null;try{await slotsLoad()}catch{}render()}));
+    document.querySelectorAll("[data-slot]").forEach(b=>b.addEventListener("click",()=>{state.slot=Number(b.dataset.slot);render()}));
+    document.querySelector("#retryStaff")?.addEventListener("click",async()=>{state.loadError=null;state.staffList=[];render()});
+    document.querySelector("#retrySlots")?.addEventListener("click",async()=>{state.loadError=null;state.slots=[];render()});
+
+    document.querySelector("#next")?.addEventListener("click",async()=>{
+      if(step==="location"&&!state.location)return toast("Выберите филиал","error");
+      if(step==="service"&&!state.service)return toast("Выберите услугу","error");
+      if(step==="staff"&&!cfg.allow_any_staff&&!state.staff)return toast("Выберите специалиста","error");
+      if(step==="datetime"&&state.slot===null)return toast("Выберите время","error");
+      state.index=Math.min(steps.length-1,state.index+1);state.loadError=null;render();
+    });
+
+    document.querySelector("#waitlistForm")?.addEventListener("submit",async e=>{
+      e.preventDefault();const form=e.currentTarget,out=document.querySelector("#waitlistResult"),btn=form.querySelector("button"),fd=new FormData(form);
+      btn.disabled=true;btn.textContent="Отправляем…";
+      try{
+        await rpcRetry("create_public_widget_waitlist",{p_public_key:widgetKey,p_location_id:state.location.id,p_service_id:state.service.id,p_staff_id:state.staff?.id||null,p_customer_name:fd.get("name"),p_customer_phone:fd.get("phone"),p_customer_email:fd.get("email")||null,p_desired_date:state.date,p_note:null},{attempts:1,timeout:9000});
+        out.innerHTML='<div class="notice success">Готово. Администратор увидит вашу заявку.</div>';btn.remove();
+      }catch(err){out.innerHTML='<div class="notice error">'+esc(friendlyError(err))+'</div>';btn.disabled=false;btn.textContent="Встать в лист ожидания"}
+    });
+
+    document.querySelector("#contactForm")?.addEventListener("submit",async e=>{
+      e.preventDefault();
+      const form=e.currentTarget,fd=new FormData(form),chosen=state.slots[state.slot],staffId=state.staff?.id||chosen?.staff_id,btn=document.querySelector("#bookSubmit"),out=document.querySelector("#bookResult");
+      if(!chosen)return;
+      btn.disabled=true;btn.textContent="Создаём запись…";out.innerHTML="";
+      const bookingKey=crypto.randomUUID();
+      const args=widgetKey
+        ? {p_public_key:widgetKey,p_location_id:state.location.id,p_service_id:state.service.id,p_staff_id:staffId,p_start_at:chosen.start_at,p_customer_name:fd.get("name"),p_customer_phone:fd.get("phone"),p_customer_email:fd.get("email")||null,p_note:null,p_booking_key:bookingKey}
+        : {p_slug:data.organization.slug,p_location_id:state.location.id,p_service_id:state.service.id,p_staff_id:staffId,p_start_at:chosen.start_at,p_customer_name:fd.get("name"),p_customer_phone:fd.get("phone"),p_customer_email:fd.get("email")||null,p_note:null,p_booking_key:bookingKey};
+      try{
+        const booking=widgetKey
+          ? await rpcRetry("create_public_widget_booking",args,{attempts:1,timeout:12000})
+          : await rpcRetry("create_public_booking",args,{attempts:1,timeout:12000});
+        if(widgetKey)rpcRetry("track_widget_event",{p_public_key:widgetKey,p_session_key:sk,p_event_type:"booking"},{attempts:1,timeout:4000}).catch(()=>{});
+        if(widgetKey)window.parent?.postMessage({type:"lootly:booking-complete",widgetKey,bookingId:booking.id,startAt:booking.start_at},"*");
+        app.innerHTML='<div class="booking-shell" style="--accent:'+esc(cfg.primary_color)+'"><div class="booking-card"><div class="booking-body" style="padding-top:60px;text-align:center"><div style="width:64px;height:64px;border-radius:50%;background:var(--success-soft);color:var(--success);display:grid;place-items:center;font-size:30px;margin:0 auto 18px">✓</div><h1>Вы записаны</h1><p class="muted">'+esc(state.service.name)+' · '+dt(booking.start_at)+'</p><div class="summary" style="margin-top:22px;text-align:left"><b>'+esc(data.organization.name)+'</b><div class="muted tiny" style="margin-top:5px">'+esc(state.location.name)+'</div></div>'+(cfg.show_branding?'<div class="tiny muted" style="margin-top:26px">Powered by Lootly</div>':'')+'</div></div></div>';
+      }catch(err){
+        const message=friendlyError(err);
+        if(String(err?.message||"").toLowerCase().includes("no longer available")){
+          try{state.slots=[];state.loadError=null;await slotsLoad()}catch{}
+          state.index=Math.max(0,steps.indexOf("datetime"));toast(message,"error");render();return;
+        }
+        out.innerHTML='<div class="notice error">'+esc(message)+'</div><button type="button" class="btn secondary" id="bookRetry">Повторить</button>';
+        btn.disabled=false;btn.textContent="Подтвердить запись";
+        document.querySelector("#bookRetry")?.addEventListener("click",()=>btn.click());
+        if(widgetKey)window.parent?.postMessage({type:"lootly:error",stage:"booking",message,widgetKey},"*");
+      }
+    });
+  }
+  render().catch(err=>{showError("Не удалось загрузить форму",friendlyError(err),true)});
 }
 
 async function route(){
