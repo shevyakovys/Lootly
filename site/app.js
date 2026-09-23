@@ -553,7 +553,7 @@ async function bookingExperience({widgetKey=null,slug=null}){
   const state={
     location:locs.length===1?locs[0]:null,
     service:services.length===1?services[0]:null,
-    staff:null,staffList:[],date:todayIso(),slots:[],slot:null,index:0,busy:false,loadError:null
+    staff:null,staffList:[],staffLoaded:false,date:todayIso(),slots:[],slotsLoadedFor:null,slot:null,index:0,busy:false,loadError:null,contact:{name:"",phone:"",email:""}
   };
 
   let steps=(cfg.step_order||["location","service","staff","datetime"]).filter(x=>x!=="staff"||cfg.show_staff_step);
@@ -570,11 +570,13 @@ async function bookingExperience({widgetKey=null,slug=null}){
       state.staffList=widgetKey
         ? await rpcRetry("get_public_widget_staff",{p_public_key:widgetKey,p_location_id:state.location.id,p_service_id:state.service.id},{attempts:2})
         : await rpcRetry("get_public_staff",{p_slug:data.organization.slug,p_location_id:state.location.id,p_service_id:state.service.id},{attempts:2});
+      state.staffLoaded=true;
     }catch(err){state.loadError=friendlyError(err);throw err}
   }
   async function slotsLoad(){
     if(!state.location||!state.service)return;
     state.loadError=null;state.slot=null;
+    const loadKey=[state.date,state.location?.id,state.service?.id,state.staff?.id||"any"].join("|");
     const args=widgetKey
       ? {p_public_key:widgetKey,p_location_id:state.location.id,p_service_id:state.service.id,p_day:state.date,p_staff_id:state.staff?.id||null}
       : {p_slug:data.organization.slug,p_location_id:state.location.id,p_service_id:state.service.id,p_day:state.date,p_staff_id:state.staff?.id||null};
@@ -582,6 +584,7 @@ async function bookingExperience({widgetKey=null,slug=null}){
       state.slots=widgetKey
         ? await rpcRetry("get_public_widget_availability",args,{attempts:2})
         : await rpcRetry("get_public_availability",args,{attempts:2});
+      state.slotsLoadedFor=loadKey;
     }catch(err){state.loadError=friendlyError(err);state.slots=[];throw err}
   }
   const dateChips=()=>Array.from({length:7},(_,i)=>{const x=new Date();x.setDate(x.getDate()+i);const iso=localIsoDate(x);return '<button type="button" class="date-chip '+(state.date===iso?"active":"")+'" data-date="'+iso+'"><span>'+x.toLocaleDateString("ru-RU",{weekday:"short"})+'</span><b>'+x.getDate()+'</b></button>'}).join("");
@@ -595,8 +598,9 @@ async function bookingExperience({widgetKey=null,slug=null}){
   async function render(){
     const step=steps[state.index];
     try{
-      if(step==="staff"&&state.location&&state.service&&!state.staffList.length)await staffLoad();
-      if(step==="datetime"&&state.location&&state.service&&!state.slots.length&&!state.loadError)await slotsLoad();
+      if(step==="staff"&&state.location&&state.service&&!state.staffLoaded)await staffLoad();
+      const slotKey=[state.date,state.location?.id,state.service?.id,state.staff?.id||"any"].join("|");
+      if(step==="datetime"&&state.location&&state.service&&state.slotsLoadedFor!==slotKey&&!state.loadError)await slotsLoad();
     }catch(err){/* render localized error below */}
 
     let body="";
@@ -606,18 +610,22 @@ async function bookingExperience({widgetKey=null,slug=null}){
     if(step==="service")body=groupedServices();
     if(step==="staff"){
       if(state.loadError)body='<div class="notice error">'+esc(state.loadError)+'</div><button type="button" class="btn secondary" id="retryStaff">Повторить</button>';
+      else if(!state.staffList.length&&!cfg.allow_any_staff)body='<div class="empty-specialists"><b>Нет доступных специалистов</b><span class="muted tiny">Для выбранных услуги и филиала сейчас никто не доступен. Вернитесь назад и измените выбор.</span></div>';
       else body='<div class="option-grid">'+(cfg.allow_any_staff?'<button type="button" class="option '+(!state.staff?"active":"")+'" data-staff=""><div class="person"><span class="avatar">★</span><div><b>Любой специалист</b><small>Подберём ближайшее время</small></div></div></button>':"")+state.staffList.map(x=>'<button type="button" class="option '+(state.staff?.id===x.id?"active":"")+'" data-staff="'+x.id+'"><div class="person">'+staffVisual(x)+'<div><b>'+esc(x.name)+'</b><small>Специалист</small></div></div></button>').join("")+'</div>';
     }
     if(step==="datetime"){
       let slotsPart="";
       if(state.loadError)slotsPart='<div class="notice error">'+esc(state.loadError)+'</div><button type="button" class="btn secondary" id="retrySlots">Повторить загрузку</button>';
-      else if(state.slots.length)slotsPart='<div class="slot-grid">'+state.slots.map((x,i)=>'<button type="button" class="slot '+(state.slot===i?"active":"")+'" data-slot="'+i+'">'+new Date(x.start_at).toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"})+'</button>').join("")+'</div>';
+      else if(state.slots.length){
+        const groups=[["Утро",x=>new Date(x.start_at).getHours()<12],["Днём",x=>{const h=new Date(x.start_at).getHours();return h>=12&&h<17}],["Вечером",x=>new Date(x.start_at).getHours()>=17]];
+        slotsPart=groups.map(([title,test])=>{const items=state.slots.map((x,i)=>({x,i})).filter(({x})=>test(x));return items.length?'<div class="slot-section"><div class="slot-section-title">'+title+'</div><div class="slot-grid">'+items.map(({x,i})=>'<button type="button" class="slot '+(state.slot===i?"active":"")+'" data-slot="'+i+'">'+new Date(x.start_at).toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"})+'</button>').join("")+'</div></div>':""}).join("");
+      }
       else slotsPart='<div class="muted" style="padding:18px 0">На этот день свободных окон нет.</div>'+(widgetKey&&cfg.waitlist_enabled?'<div class="waitlist-box"><b>Хотите, чтобы вам написали при появлении окна?</b><p class="muted tiny">Оставьте контакты — заявка попадёт администратору.</p><form id="waitlistForm" class="stack"><input name="name" placeholder="Имя" required><input name="phone" type="tel" placeholder="Телефон" required><input name="email" type="email" placeholder="Email — необязательно"><button class="btn secondary">Встать в лист ожидания</button><div id="waitlistResult"></div></form></div>':"");
       body='<div class="date-strip">'+dateChips()+'</div>'+slotsPart;
     }
     if(step==="contact"){
       const chosen=state.slots[state.slot];
-      body='<form id="contactForm" class="stack"><div class="summary"><b>'+esc(state.service?.name||"")+'</b><div class="muted tiny" style="margin-top:4px">'+esc(state.location?.name||"")+' · '+(chosen?dt(chosen.start_at):"")+(state.staff?" · "+esc(state.staff.name):"")+'</div></div><label class="field"><span>Ваше имя</span><input name="name" autocomplete="name" required></label><label class="field"><span>Телефон</span><input name="phone" type="tel" autocomplete="tel" required></label><label class="field"><span>Email <span class="muted">(необязательно)</span></span><input name="email" type="email" autocomplete="email"></label><button class="btn brand" id="bookSubmit" style="background:'+cfg.primary_color+'">Подтвердить запись</button><div id="bookResult"></div></form>';
+      body='<form id="contactForm" class="stack"><div class="summary"><b>'+esc(state.service?.name||"")+'</b><div class="muted tiny" style="margin-top:4px">'+esc(state.location?.name||"")+' · '+(chosen?dt(chosen.start_at):"")+(state.staff?" · "+esc(state.staff.name):"")+'</div></div><label class="field"><span>Ваше имя</span><input name="name" autocomplete="name" value="'+esc(state.contact.name)+'" required><span class="field-error" data-error="name"></span></label><label class="field"><span>Телефон</span><input name="phone" type="tel" inputmode="tel" autocomplete="tel" value="'+esc(state.contact.phone)+'" placeholder="+7 999 000-00-00" required><span class="field-error" data-error="phone"></span></label><label class="field"><span>Email <span class="muted">(необязательно)</span></span><input name="email" type="email" autocomplete="email" value="'+esc(state.contact.email)+'"><span class="field-error" data-error="email"></span></label><div class="contact-actions"><button type="button" class="btn secondary" id="contactBack">Назад</button><button class="btn brand" id="bookSubmit" style="background:'+cfg.primary_color+'">Подтвердить запись</button></div><div id="bookResult"></div></form>';
     }
 
     const titles={location:"Выберите филиал",service:"Выберите услугу",staff:"К кому записаться?",datetime:"Выберите время",contact:"Контактные данные"};
@@ -625,13 +633,13 @@ async function bookingExperience({widgetKey=null,slug=null}){
     app.innerHTML='<div class="booking-shell" style="--accent:'+esc(cfg.primary_color)+'"><div class="booking-card"><div class="booking-head"><div class="spread"><div><div class="tiny muted">'+esc(data.organization.name)+'</div><h2 style="margin:5px 0 0">'+esc(cfg.title||"Онлайн-запись")+'</h2></div><span class="tiny muted">'+(state.index+1)+'/'+steps.length+'</span></div><p class="muted tiny" style="margin-top:7px">'+esc(cfg.subtitle||"")+'</p></div><div class="stepbar"><span style="width:'+Math.round((state.index+1)/steps.length*100)+'%"></span></div><div class="booking-body"><div style="padding-top:22px"><h2>'+titles[step]+'</h2><p class="muted">'+subs[step]+'</p>'+body+'</div>'+(step!=="contact"?'<div class="booking-actions">'+(state.index?'<button class="btn secondary" id="back">Назад</button>':'<span></span>')+'<button class="btn brand" id="next" style="background:'+cfg.primary_color+'" '+((step==="datetime"&&!state.slots.length)?"disabled":"")+'>Продолжить</button></div>':'')+(cfg.show_branding?'<div class="tiny muted" style="text-align:center;margin-top:24px">Powered by Lootly</div>':'')+'</div></div></div>';
 
     document.querySelector("#back")?.addEventListener("click",()=>{state.index=Math.max(0,state.index-1);state.loadError=null;render()});
-    document.querySelectorAll("[data-location]").forEach(b=>b.addEventListener("click",()=>{state.location=locs.find(x=>x.id===b.dataset.location);state.staff=null;state.staffList=[];state.slots=[];state.loadError=null;render()}));
-    document.querySelectorAll("[data-service]").forEach(b=>b.addEventListener("click",()=>{state.service=services.find(x=>x.id===b.dataset.service);state.staff=null;state.staffList=[];state.slots=[];state.loadError=null;render()}));
-    document.querySelectorAll("[data-staff]").forEach(b=>b.addEventListener("click",()=>{state.staff=b.dataset.staff?state.staffList.find(x=>x.id===b.dataset.staff):null;state.slots=[];state.loadError=null;render()}));
-    document.querySelectorAll("[data-date]").forEach(b=>b.addEventListener("click",async()=>{state.date=b.dataset.date;state.slots=[];state.loadError=null;try{await slotsLoad()}catch{}render()}));
+    document.querySelectorAll("[data-location]").forEach(b=>b.addEventListener("click",()=>{state.location=locs.find(x=>x.id===b.dataset.location);state.staff=null;state.staffList=[];state.staffLoaded=false;state.slots=[];state.slotsLoadedFor=null;state.loadError=null;render()}));
+    document.querySelectorAll("[data-service]").forEach(b=>b.addEventListener("click",()=>{state.service=services.find(x=>x.id===b.dataset.service);state.staff=null;state.staffList=[];state.staffLoaded=false;state.slots=[];state.slotsLoadedFor=null;state.loadError=null;render()}));
+    document.querySelectorAll("[data-staff]").forEach(b=>b.addEventListener("click",()=>{state.staff=b.dataset.staff?state.staffList.find(x=>x.id===b.dataset.staff):null;state.slots=[];state.slotsLoadedFor=null;state.loadError=null;render()}));
+    document.querySelectorAll("[data-date]").forEach(b=>b.addEventListener("click",async()=>{state.date=b.dataset.date;state.slots=[];state.slotsLoadedFor=null;state.loadError=null;try{await slotsLoad()}catch{}render()}));
     document.querySelectorAll("[data-slot]").forEach(b=>b.addEventListener("click",()=>{state.slot=Number(b.dataset.slot);render()}));
-    document.querySelector("#retryStaff")?.addEventListener("click",async()=>{state.loadError=null;state.staffList=[];render()});
-    document.querySelector("#retrySlots")?.addEventListener("click",async()=>{state.loadError=null;state.slots=[];render()});
+    document.querySelector("#retryStaff")?.addEventListener("click",async()=>{state.loadError=null;state.staffList=[];state.staffLoaded=false;render()});
+    document.querySelector("#retrySlots")?.addEventListener("click",async()=>{state.loadError=null;state.slots=[];state.slotsLoadedFor=null;render()});
 
     document.querySelector("#next")?.addEventListener("click",async()=>{
       if(step==="location"&&!state.location)return toast("Выберите филиал","error");
@@ -639,6 +647,14 @@ async function bookingExperience({widgetKey=null,slug=null}){
       if(step==="staff"&&!cfg.allow_any_staff&&!state.staff)return toast("Выберите специалиста","error");
       if(step==="datetime"&&state.slot===null)return toast("Выберите время","error");
       state.index=Math.min(steps.length-1,state.index+1);state.loadError=null;render();
+    });
+
+    document.querySelector("#contactBack")?.addEventListener("click",()=>{state.index=Math.max(0,state.index-1);state.loadError=null;render()});
+    document.querySelector("#contactForm")?.addEventListener("input",e=>{
+      if(!e.target?.name)return;
+      state.contact[e.target.name]=e.target.value;
+      e.target.classList.remove("input-invalid");
+      const error=document.querySelector('[data-error="'+e.target.name+'"]');if(error)error.textContent="";
     });
 
     document.querySelector("#waitlistForm")?.addEventListener("submit",async e=>{
@@ -654,6 +670,14 @@ async function bookingExperience({widgetKey=null,slug=null}){
       e.preventDefault();
       const form=e.currentTarget,fd=new FormData(form),chosen=state.slots[state.slot],staffId=state.staff?.id||chosen?.staff_id,btn=document.querySelector("#bookSubmit"),out=document.querySelector("#bookResult");
       if(!chosen)return;
+      state.contact={name:String(fd.get("name")||"").trim(),phone:String(fd.get("phone")||"").trim(),email:String(fd.get("email")||"").trim()};
+      const errors={};
+      if(state.contact.name.length<2)errors.name="Укажите имя.";
+      const digits=state.contact.phone.replace(/\D/g,"");
+      if(digits.length<10)errors.phone="Проверьте номер телефона.";
+      if(state.contact.email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(state.contact.email))errors.email="Проверьте email.";
+      Object.entries(errors).forEach(([name,message])=>{const input=form.elements[name],error=form.querySelector('[data-error="'+name+'"]');input?.classList.add("input-invalid");if(error)error.textContent=message});
+      if(Object.keys(errors).length){out.innerHTML='<div class="notice error">Проверьте отмеченные поля.</div>';return}
       btn.disabled=true;btn.textContent="Создаём запись…";out.innerHTML="";
       const bookingKey=crypto.randomUUID();
       const args=widgetKey
@@ -669,7 +693,7 @@ async function bookingExperience({widgetKey=null,slug=null}){
       }catch(err){
         const message=friendlyError(err);
         if(String(err?.message||"").toLowerCase().includes("no longer available")){
-          try{state.slots=[];state.loadError=null;await slotsLoad()}catch{}
+          try{state.slots=[];state.slotsLoadedFor=null;state.loadError=null;await slotsLoad()}catch{}
           state.index=Math.max(0,steps.indexOf("datetime"));toast(message,"error");render();return;
         }
         out.innerHTML='<div class="notice error">'+esc(message)+'</div><button type="button" class="btn secondary" id="bookRetry">Повторить</button>';
