@@ -149,3 +149,23 @@ flowchart LR
 Each widget has a public UUID identifier. The identifier selects configuration but is not an
 authorization secret. Tenant authorization for editing uses authenticated profiles/RLS, while public
 booking RPCs enforce widget scopes explicitly.
+
+
+## UI application architecture
+
+The public zero-cost frontend is a static hash-routed SPA on GitHub Pages.
+
+```mermaid
+flowchart LR
+    Admin[Admin browser] --> SPA[site/app.js]
+    Customer[Customer browser] --> SPA
+    Host[External website] --> Embed[site/embed.js]
+    Embed --> SPA
+    SPA --> Auth[Supabase Auth]
+    SPA --> RPC[Supabase RPC / RLS]
+    RPC --> DB[(PostgreSQL)]
+```
+
+The visual shell is responsive, but authorization and booking invariants remain server-side.
+Widget funnel events are written separately from appointment data so analytics failures cannot affect
+booking creation.
