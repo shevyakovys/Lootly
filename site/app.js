@@ -9,6 +9,7 @@ let currentProfile=null,currentOrg=null;
 
 const esc=(v="")=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const money=v=>new Intl.NumberFormat("ru-RU",{style:"currency",currency:"RUB",maximumFractionDigits:0}).format(Number(v||0));
+const durationLabel=v=>{const m=Math.max(0,Number(v||0)),h=Math.floor(m/60),r=m%60;return h?(h+" ч"+(r?" "+r+" мин":"")):(r+" мин")};
 const dt=v=>v?new Date(v).toLocaleString("ru-RU",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}):"";
 const day=v=>v?new Date(v).toLocaleDateString("ru-RU",{weekday:"short",day:"numeric",month:"short"}):"";
 const initials=v=>String(v||"?").trim().split(/\s+/).slice(0,2).map(x=>x[0]?.toUpperCase()).join("");
@@ -133,23 +134,26 @@ async function renderQuickBooking(){
 async function catalog(){
   if(!await requireAuth())return;
   const p=await profile(),manager=["owner","admin"].includes(p.role);
-  const [l,s,st,c,cat]=await Promise.all([
+  const [l,s,st,cust,cat]=await Promise.all([
     sb.from("locations").select("*").order("name"),
     sb.from("services").select("*,service_categories(name)").order("name"),
     sb.from("staff_members").select("*").order("name"),
     sb.from("customers").select("*").order("created_at",{ascending:false}),
     sb.from("service_categories").select("*").order("sort_order").order("name")
   ]);
-  const content='<div class="page-head"><div><h1>Справочники</h1><p>Услуги, команда, филиалы и клиентская база.</p></div></div><div class="tabs" id="catalogTabs"><button class="tab active" data-tab="services">Услуги '+(s.data?.length||0)+'</button><button class="tab" data-tab="staff">Сотрудники '+(st.data?.length||0)+'</button><button class="tab" data-tab="locations">Филиалы '+(l.data?.length||0)+'</button><button class="tab" data-tab="customers">Клиенты '+(c.data?.length||0)+'</button></div><section id="catalogPane" style="margin-top:16px"></section>';
+  const err=l.error||s.error||st.error||cust.error||cat.error;
+  if(err)return shell("catalog","Справочники",'<div class="notice error">'+esc(friendlyError(err))+'</div>');
+  const content='<div class="page-head"><div><h1>Справочники</h1><p>Услуги, команда, филиалы и клиентская база.</p></div></div><div class="tabs" id="catalogTabs"><button class="tab active" data-tab="services">Услуги '+(s.data?.length||0)+'</button><button class="tab" data-tab="staff">Сотрудники '+(st.data?.length||0)+'</button><button class="tab" data-tab="locations">Филиалы '+(l.data?.length||0)+'</button><button class="tab" data-tab="customers">Клиенты '+(cust.data?.length||0)+'</button></div><section id="catalogPane" style="margin-top:16px"></section>';
   await shell("catalog","Справочники",content);
-  const data={services:s.data||[],staff:st.data||[],locations:l.data||[],customers:c.data||[],categories:cat.data||[]};
+  const data={services:s.data||[],staff:st.data||[],locations:l.data||[],customers:cust.data||[],categories:cat.data||[]};
 
   const render=tab=>{
     document.querySelectorAll("#catalogTabs .tab").forEach(x=>x.classList.toggle("active",x.dataset.tab===tab));
     const pane=document.querySelector("#catalogPane");
     const categoryOptions='<option value="">Без категории</option>'+data.categories.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("");
+    const minuteOptions=Array.from({length:60},(_,i)=>'<option value="'+i+'">'+String(i).padStart(2,"0")+' мин</option>').join("");
     const forms={
-      services:'<div class="grid grid-2"><form id="addEntity" class="card stack"><div class="card-title"><div><h2>Новая услуга</h2><p class="muted tiny">Цена и длительность фиксируются в записи как snapshot.</p></div></div><div class="grid grid-2"><label class="field"><span>Название</span><input name="name" required></label><label class="field"><span>Категория</span><select name="category">'+categoryOptions+'</select></label><label class="field"><span>Длительность</span><input name="duration" type="number" value="60" min="1"></label><label class="field"><span>Цена</span><input name="price" type="number" value="0" min="0" step=".01"></label></div><button class="btn brand">Добавить услугу</button></form><form id="categoryForm" class="card stack"><div><h2>Категории</h2><p class="muted tiny">Помогают структурировать каталог и форму онлайн-записи.</p></div><label class="field"><span>Название категории</span><input name="name" placeholder="Стрижки, массаж, консультации" required></label><button class="btn secondary">Добавить категорию</button><div class="scope-pills">'+data.categories.map(x=>'<span class="category-label">'+esc(x.name)+'</span>').join("")+'</div></form></div>',
+      services:'<div class="grid grid-2"><form id="addEntity" class="card stack"><input type="hidden" name="entity_id"><div class="card-title"><div><h2 id="serviceFormTitle">Новая услуга</h2><p class="muted tiny">Длительность хранится точно в минутах и определяет реальный конец записи.</p></div></div><div class="grid grid-2"><label class="field"><span>Название</span><input name="name" required></label><label class="field"><span>Категория</span><select name="category">'+categoryOptions+'</select></label></div><div class="duration-editor"><label class="field"><span>Часы</span><input name="duration_hours" type="number" value="1" min="0" max="24" step="1"></label><label class="field"><span>Минуты</span><select name="duration_minutes_part">'+minuteOptions+'</select></label><label class="field"><span>Цена</span><input name="price" type="number" value="0" min="0" step=".01"></label></div><div class="grid grid-2"><label class="field"><span>Статус</span><select name="active"><option value="true">Активна</option><option value="false">Выключена</option></select></label><div class="notice info duration-hint">Например, 1 ч 20 мин = запись займёт ровно 80 минут. Шаг начала записи настраивается отдельно.</div></div><div class="cluster"><button class="btn brand" id="serviceSubmit">Добавить услугу</button><button type="button" class="btn secondary hidden" id="cancelServiceEdit">Отмена</button></div></form><form id="categoryForm" class="card stack"><div><h2>Категории</h2><p class="muted tiny">Помогают структурировать каталог и форму онлайн-записи.</p></div><label class="field"><span>Название категории</span><input name="name" placeholder="Стрижки, массаж, консультации" required></label><button class="btn secondary">Добавить категорию</button><div class="scope-pills">'+data.categories.map(x=>'<span class="category-label">'+esc(x.name)+'</span>').join("")+'</div></form></div>',
       staff:'<div class="grid grid-2"><form id="addEntity" class="card stack"><h2>Новый сотрудник</h2><label class="field"><span>Имя</span><input name="name" required></label><label class="field"><span>Филиал</span><select name="location">'+data.locations.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'</select></label><label class="field"><span>Фото — URL</span><input name="avatar_url" type="url" placeholder="https://..."><small>Можно оставить пустым — покажем инициалы.</small></label><button class="btn brand">Добавить сотрудника</button></form><form id="assignService" class="card stack"><h2>Назначить услугу</h2><label class="field"><span>Сотрудник</span><select name="staff">'+data.staff.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'</select></label><label class="field"><span>Услуга</span><select name="service">'+data.services.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'</select></label><button class="btn secondary">Назначить</button><p class="muted tiny">Без назначения сотрудник не появится для этой услуги в онлайн-записи.</p></form></div>',
       locations:'<form id="addEntity" class="card stack"><h2>Новый филиал</h2><div class="grid grid-3"><label class="field"><span>Название</span><input name="name" required></label><label class="field"><span>Timezone</span><input name="timezone" value="Europe/Moscow"></label><label class="field"><span>Адрес</span><input name="address"></label></div><button class="btn brand">Добавить филиал</button></form>',
       customers:'<form id="addEntity" class="card stack"><h2>Новый клиент</h2><div class="grid grid-3"><label class="field"><span>Имя</span><input name="name" required></label><label class="field"><span>Телефон</span><input name="phone" required></label><label class="field"><span>Email</span><input name="email" type="email"></label></div><label class="field"><span>Заметка</span><textarea name="note"></textarea></label><button class="btn brand">Добавить клиента</button></form>'
@@ -158,79 +162,122 @@ async function catalog(){
     const renderRows=()=>{
       const q=(document.querySelector("#entitySearch")?.value||"").toLowerCase(),catId=document.querySelector("#categoryFilter")?.value||"";
       const rows=data[tab].filter(x=>JSON.stringify(x).toLowerCase().includes(q)&&(!catId||x.category_id===catId));
-      document.querySelector("#entityList").innerHTML=rows.length?rows.map(x=>entityCard(tab,x)).join(""):emptyState("Ничего не найдено","Измените поиск или фильтр.");
+      document.querySelector("#entityList").innerHTML=rows.length?rows.map(x=>entityCard(tab,x,manager)).join(""):emptyState("Ничего не найдено","Измените поиск или фильтр.");
     };
-    const cards=data[tab].map(x=>entityCard(tab,x)).join("");
+    const cards=data[tab].map(x=>entityCard(tab,x,manager)).join("");
     pane.innerHTML=(manager?forms[tab]:"")+'<div class="card" style="margin-top:16px"><div class="card-title"><h2>'+({services:"Услуги",staff:"Сотрудники",locations:"Филиалы",customers:"Клиенты"}[tab])+'</h2>'+filters+'</div><div id="entityList">'+(cards||emptyState("Пока пусто","Добавьте первую запись в этот справочник."))+'</div></div>';
     document.querySelector("#entitySearch")?.addEventListener("input",renderRows);
     document.querySelector("#categoryFilter")?.addEventListener("change",renderRows);
+
     if(manager){
       bindAddEntity(tab,p,data);
       if(tab==="services"){
-        document.querySelector("#categoryForm")?.addEventListener("submit",async e=>{e.preventDefault();const f=new FormData(e.currentTarget),name=String(f.get("name")).trim();if(!name)return;const {error}=await sb.from("service_categories").insert({organization_id:p.organization_id,name});if(error)toast(error.message,"error");else{toast("Категория добавлена");catalog()}});
+        const serviceForm=document.querySelector("#addEntity");
+        const resetServiceForm=()=>{
+          serviceForm.reset();
+          serviceForm.elements.entity_id.value="";
+          serviceForm.elements.duration_hours.value="1";
+          serviceForm.elements.duration_minutes_part.value="0";
+          serviceForm.elements.active.value="true";
+          document.querySelector("#serviceFormTitle").textContent="Новая услуга";
+          document.querySelector("#serviceSubmit").textContent="Добавить услугу";
+          document.querySelector("#cancelServiceEdit").classList.add("hidden");
+        };
+        document.querySelector("#cancelServiceEdit")?.addEventListener("click",resetServiceForm);
+        document.querySelector("#entityList")?.addEventListener("click",e=>{
+          const button=e.target.closest("[data-edit-service]");if(!button)return;
+          const item=data.services.find(x=>x.id===button.dataset.editService);if(!item)return;
+          serviceForm.elements.entity_id.value=item.id;
+          serviceForm.elements.name.value=item.name||"";
+          serviceForm.elements.category.value=item.category_id||"";
+          serviceForm.elements.duration_hours.value=Math.floor(Number(item.duration_minutes||0)/60);
+          serviceForm.elements.duration_minutes_part.value=String(Number(item.duration_minutes||0)%60);
+          serviceForm.elements.price.value=item.price||0;
+          serviceForm.elements.active.value=String(item.active);
+          document.querySelector("#serviceFormTitle").textContent="Редактировать услугу";
+          document.querySelector("#serviceSubmit").textContent="Сохранить изменения";
+          document.querySelector("#cancelServiceEdit").classList.remove("hidden");
+          serviceForm.scrollIntoView({behavior:"smooth",block:"start"});
+        });
+        document.querySelector("#categoryForm")?.addEventListener("submit",async e=>{e.preventDefault();const f=new FormData(e.currentTarget),name=String(f.get("name")).trim();if(!name)return;const {error}=await sb.from("service_categories").insert({organization_id:p.organization_id,name});if(error)toast(friendlyError(error),"error");else{toast("Категория добавлена");catalog()}});
       }
       if(tab==="staff"){
-        document.querySelector("#assignService")?.addEventListener("submit",async e=>{e.preventDefault();const f=new FormData(e.currentTarget);const {error}=await sb.from("staff_services").insert({staff_id:f.get("staff"),service_id:f.get("service")});if(error&&error.code!=="23505")toast(error.message,"error");else toast("Услуга назначена")});
+        document.querySelector("#assignService")?.addEventListener("submit",async e=>{e.preventDefault();const f=new FormData(e.currentTarget);const {error}=await sb.from("staff_services").insert({staff_id:f.get("staff"),service_id:f.get("service")});if(error&&error.code!=="23505")toast(friendlyError(error),"error");else toast("Услуга назначена")});
       }
     }
   };
   document.querySelectorAll("#catalogTabs .tab").forEach(b=>b.addEventListener("click",()=>render(b.dataset.tab)));
   render("services");
 }
-function entityCard(tab,x){
+
+function entityCard(tab,x,editable=false){
   if(tab==="customers")return '<div class="spread" style="padding:13px 0;border-bottom:1px solid var(--line)"><div class="person"><span class="avatar">'+initials(x.name)+'</span><div><a href="#/client/'+x.id+'"><b>'+esc(x.name)+'</b></a><small>'+esc(x.phone)+' · '+esc(x.email||"без email")+'</small></div></div><span class="muted tiny">'+esc(x.note||"")+'</span></div>';
-  if(tab==="services")return '<div class="spread" style="padding:13px 0;border-bottom:1px solid var(--line)"><div><div class="cluster"><b>'+esc(x.name)+'</b>'+(x.service_categories?.name?'<span class="category-label">'+esc(x.service_categories.name)+'</span>':"")+'</div><div class="muted tiny">'+x.duration_minutes+' мин</div></div><b>'+money(x.price)+'</b></div>';
+  if(tab==="services")return '<div class="spread service-row" style="padding:13px 0;border-bottom:1px solid var(--line)"><div><div class="cluster"><b>'+esc(x.name)+'</b>'+(x.service_categories?.name?'<span class="category-label">'+esc(x.service_categories.name)+'</span>':"")+'<span class="status '+(x.active?"confirmed":"canceled")+'">'+(x.active?"Активна":"Выключена")+'</span></div><div class="muted tiny">'+durationLabel(x.duration_minutes)+'</div></div><div class="cluster">'+(editable?'<button type="button" class="btn secondary sm" data-edit-service="'+x.id+'">Изменить</button>':"")+'<b>'+money(x.price)+'</b></div></div>';
   if(tab==="staff"){const avatar=x.avatar_url?'<img class="staff-photo" src="'+esc(x.avatar_url)+'" alt="" loading="lazy">':'<span class="avatar">'+initials(x.name)+'</span>';return '<div class="spread" style="padding:13px 0;border-bottom:1px solid var(--line)"><div class="person">'+avatar+'<div><b>'+esc(x.name)+'</b><small>'+(x.active?"Активен":"Неактивен")+'</small></div></div></div>'}
   return '<div class="spread" style="padding:13px 0;border-bottom:1px solid var(--line)"><div><b>'+esc(x.name)+'</b><div class="muted tiny">'+esc(x.address||"Адрес не указан")+' · '+esc(x.timezone||"")+'</div></div></div>';
 }
 function bindAddEntity(tab,p,data){
   document.querySelector("#addEntity")?.addEventListener("submit",async e=>{
-    e.preventDefault();const f=new FormData(e.currentTarget);let table,payload;
-    if(tab==="services"){table="services";payload={organization_id:p.organization_id,name:f.get("name"),duration_minutes:Number(f.get("duration")),price:f.get("price"),category_id:f.get("category")||null}}
+    e.preventDefault();
+    const f=new FormData(e.currentTarget);let table,payload;
+    const id=f.get("entity_id")||null;
+    if(tab==="services"){
+      const hours=Math.max(0,Number(f.get("duration_hours")||0));
+      const minutes=Math.max(0,Number(f.get("duration_minutes_part")||0));
+      const duration=Math.round(hours*60+minutes);
+      if(duration<1)return toast("Укажите длительность услуги","error");
+      if(duration>1440)return toast("Длительность услуги не может превышать 24 часа","error");
+      table="services";
+      payload={organization_id:p.organization_id,name:String(f.get("name")||"").trim(),duration_minutes:duration,price:Number(f.get("price")||0),category_id:f.get("category")||null,active:f.get("active")!=="false"};
+    }
     else if(tab==="staff"){table="staff_members";payload={organization_id:p.organization_id,name:f.get("name"),location_id:f.get("location"),avatar_url:f.get("avatar_url")||null}}
     else if(tab==="locations"){table="locations";payload={organization_id:p.organization_id,name:f.get("name"),timezone:f.get("timezone"),address:f.get("address")||null}}
     else{table="customers";payload={organization_id:p.organization_id,name:f.get("name"),phone:f.get("phone"),email:f.get("email")||null,note:f.get("note")||null}}
-    const {error}=await sb.from(table).insert(payload);if(error)toast(error.message,"error");else{toast("Добавлено");catalog()}
+    const query=id&&tab==="services"?sb.from(table).update(payload).eq("id",id):sb.from(table).insert(payload);
+    const {error}=await query;
+    if(error)toast(friendlyError(error),"error");else{toast(id?"Изменения сохранены":"Добавлено");catalog()}
   })
 }
-
-function localDateParts(value,timeZone){
-  const parts=new Intl.DateTimeFormat("en-CA",{timeZone,year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(new Date(value));
-  const get=t=>parts.find(x=>x.type===t)?.value||"";
-  return {date:get("year")+"-"+get("month")+"-"+get("day"),hour:Number(get("hour")),minute:Number(get("minute"))};
-}
-function addDaysIso(iso,delta){const d=new Date(iso+"T12:00:00");d.setDate(d.getDate()+delta);return d.toISOString().slice(0,10)}
-function weekStartIso(iso){const d=new Date(iso+"T12:00:00"),wd=(d.getDay()+6)%7;d.setDate(d.getDate()-wd);return d.toISOString().slice(0,10)}
-
 async function calendar(){
   if(!await requireAuth())return;
   const p=await profile(),manager=["owner","admin"].includes(p.role);
-  const [apptRes,staffRes,locRes]=await Promise.all([
+  const [apptRes,staffRes,locRes,hoursRes]=await Promise.all([
     sb.from("appointments").select("*,customers(name,phone),services(name),staff_members(name),locations(name,timezone)").order("start_at",{ascending:true}).limit(500),
     sb.from("staff_members").select("id,name").eq("active",true).order("name"),
-    sb.from("locations").select("id,name,timezone").eq("active",true).order("name")
+    sb.from("locations").select("id,name,timezone").eq("active",true).order("name"),
+    sb.from("working_hours").select("start_time,end_time")
   ]);
-  if(apptRes.error)return shell("calendar","Календарь",'<div class="notice error">'+esc(apptRes.error.message)+'</div>');
-  const all=apptRes.data||[],staff=staffRes.data||[],locations=locRes.data||[];
-  let mode="week",anchor=todayIso(),staffFilter="",locationFilter="";
+  const loadError=apptRes.error||staffRes.error||locRes.error||hoursRes.error;
+  if(loadError)return shell("calendar","Календарь",'<div class="notice error">'+esc(friendlyError(loadError))+'</div>');
+  const all=apptRes.data||[],staff=staffRes.data||[],locations=locRes.data||[],working=hoursRes.data||[];
+  let mode="week",anchor=todayIso(),staffFilter="",locationFilter="",gridStep=15;
+  try{const stored=Number(localStorage.getItem("lootly_calendar_grid_step"));if([5,10,15,20,30,60].includes(stored))gridStep=stored}catch{}
+  const hourFromTime=t=>Number(String(t||"08:00").slice(0,2));
+  const minuteFromTime=t=>Number(String(t||"00:00").slice(3,5));
+  const startHour=working.length?Math.max(0,Math.min(...working.map(x=>hourFromTime(x.start_time)))):8;
+  const endHour=working.length?Math.min(24,Math.max(...working.map(x=>hourFromTime(x.end_time)+(minuteFromTime(x.end_time)>0?1:0)))):21;
 
-  const content='<div class="page-head"><div><h1>Календарь</h1><p>Рабочая неделя, загрузка команды и быстрый перенос записей.</p></div><div class="cluster"><select id="calendarMode" style="width:auto"><option value="week">Неделя</option><option value="day">День</option></select><select id="calendarLocation" style="width:auto"><option value="">Все филиалы</option>'+locations.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'</select><select id="calendarStaff" style="width:auto"><option value="">Все сотрудники</option>'+staff.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'</select></div></div><div class="calendar-toolbar"><div class="cluster"><button class="btn secondary sm" id="calPrev">←</button><button class="btn secondary sm" id="calToday">Сегодня</button><button class="btn secondary sm" id="calNext">→</button></div><b id="calendarPeriod"></b><span class="muted tiny">'+(manager?"Перетащите запись на другой час, чтобы перенести.":"Календарь доступен только для просмотра.")+'</span></div><div class="calendar-grid week" id="calendarGrid"></div>';
+  const content='<div class="page-head"><div><h1>Календарь</h1><p>Рабочая неделя, загрузка команды и точный перенос записей.</p></div><div class="cluster"><select id="calendarMode" style="width:auto"><option value="week">Неделя</option><option value="day">День</option></select><select id="calendarGridStep" style="width:auto"><option value="5">Сетка 5 мин</option><option value="10">Сетка 10 мин</option><option value="15">Сетка 15 мин</option><option value="20">Сетка 20 мин</option><option value="30">Сетка 30 мин</option><option value="60">Сетка 60 мин</option></select><select id="calendarLocation" style="width:auto"><option value="">Все филиалы</option>'+locations.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'</select><select id="calendarStaff" style="width:auto"><option value="">Все сотрудники</option>'+staff.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'</select></div></div><div class="calendar-toolbar"><div class="cluster"><button class="btn secondary sm" id="calPrev">←</button><button class="btn secondary sm" id="calToday">Сегодня</button><button class="btn secondary sm" id="calNext">→</button></div><b id="calendarPeriod"></b><span class="muted tiny">'+(manager?"Перетащите запись — время привяжется к выбранной сетке.":"Календарь доступен только для просмотра.")+'</span></div><div class="calendar-grid week" id="calendarGrid"></div>';
   await shell("calendar","Календарь",content);
+  document.querySelector("#calendarGridStep").value=String(gridStep);
 
   function render(){
     const grid=document.querySelector("#calendarGrid");
     const start=mode==="week"?weekStartIso(anchor):anchor;
     const days=Array.from({length:mode==="week"?7:1},(_,i)=>addDaysIso(start,i));
-    const hours=Array.from({length:13},(_,i)=>8+i);
+    const hours=Array.from({length:Math.max(1,endHour-startHour)},(_,i)=>startHour+i);
+    const hourHeight=gridStep<=5?160:gridStep<=10?128:gridStep<=15?104:gridStep<=20?92:gridStep<=30?76:64;
     grid.className="calendar-grid "+mode;
+    grid.style.setProperty("--cal-hour-height",hourHeight+"px");
     document.querySelector("#calendarPeriod").textContent=mode==="week"
       ? new Date(days[0]+"T12:00:00").toLocaleDateString("ru-RU",{day:"numeric",month:"short"})+" — "+new Date(days[days.length-1]+"T12:00:00").toLocaleDateString("ru-RU",{day:"numeric",month:"short",year:"numeric"})
       : new Date(anchor+"T12:00:00").toLocaleDateString("ru-RU",{weekday:"long",day:"numeric",month:"long"});
 
+    const sublines=Array.from({length:Math.max(0,Math.floor(60/gridStep)-1)},(_,i)=>{const minute=(i+1)*gridStep;return '<span class="cal-subline" style="top:'+(minute/60*100)+'%"><i>'+String(minute).padStart(2,"0")+'</i></span>'}).join("");
     let html='<div class="cal-head"></div>'+days.map(x=>'<div class="cal-head">'+new Date(x+"T12:00:00").toLocaleDateString("ru-RU",{weekday:"short",day:"numeric",month:"short"})+'</div>').join("");
     for(const hour of hours){
       html+='<div class="cal-time">'+String(hour).padStart(2,"0")+':00</div>';
-      for(const date of days)html+='<div class="cal-cell" data-date="'+date+'" data-hour="'+hour+'"></div>';
+      for(const date of days)html+='<div class="cal-cell" data-date="'+date+'" data-hour="'+hour+'">'+sublines+'</div>';
     }
     grid.innerHTML=html;
 
@@ -238,17 +285,17 @@ async function calendar(){
     filtered.forEach(a=>{
       const tz=a.locations?.timezone||Intl.DateTimeFormat().resolvedOptions().timeZone;
       const lp=localDateParts(a.start_at,tz);
-      if(!days.includes(lp.date)||lp.hour<8||lp.hour>20)return;
+      if(!days.includes(lp.date)||lp.hour<startHour||lp.hour>=endHour)return;
       const cell=grid.querySelector('.cal-cell[data-date="'+lp.date+'"][data-hour="'+lp.hour+'"]');
       if(!cell)return;
       const ev=document.createElement("div");
       ev.className="cal-event "+a.status;
       ev.draggable=manager&&["booked","confirmed"].includes(a.status);
       ev.dataset.appointment=a.id;
-      const height=Math.max(42,Math.min(180,(Number(a.duration_minutes||60)/60)*64-7));
-      ev.style.top=(4+(lp.minute/60)*64)+"px";ev.style.height=height+"px";
-      ev.innerHTML='<b>'+String(lp.hour).padStart(2,"0")+':'+String(lp.minute).padStart(2,"0")+' · '+esc(a.customers?.name||"Клиент")+'</b><span>'+esc(a.services?.name||"")+' · '+esc(a.staff_members?.name||"")+'</span>';
-      ev.title=(a.customers?.name||"")+" · "+(a.services?.name||"")+" · "+statusLabel(a.status);
+      const height=Math.max(30,(Number(a.duration_minutes||60)/60)*hourHeight-5);
+      ev.style.top=(3+(lp.minute/60)*hourHeight)+"px";ev.style.height=height+"px";
+      ev.innerHTML='<b>'+String(lp.hour).padStart(2,"0")+':'+String(lp.minute).padStart(2,"0")+' · '+esc(a.customers?.name||"Клиент")+'</b><span>'+esc(a.services?.name||"")+' · '+durationLabel(a.duration_minutes)+' · '+esc(a.staff_members?.name||"")+'</span>';
+      ev.title=(a.customers?.name||"")+" · "+(a.services?.name||"")+" · "+durationLabel(a.duration_minutes)+" · "+statusLabel(a.status);
       cell.append(ev);
     });
 
@@ -260,16 +307,21 @@ async function calendar(){
         cell.addEventListener("drop",async e=>{
           e.preventDefault();cell.classList.remove("drag-over");
           const id=e.dataTransfer.getData("text/plain");if(!id)return;
-          const hour=String(cell.dataset.hour).padStart(2,"0")+":00:00";
+          const rect=cell.getBoundingClientRect();
+          const rawMinute=Math.max(0,Math.min(59,((e.clientY-rect.top)/rect.height)*60));
+          const minute=Math.min(60-gridStep,Math.floor(rawMinute/gridStep)*gridStep);
+          const time=String(cell.dataset.hour).padStart(2,"0")+":"+String(minute).padStart(2,"0")+":00";
           try{
-            await rpcRetry("reschedule_appointment_local",{p_appointment_id:id,p_local_date:cell.dataset.date,p_local_time:hour});
-            toast("Запись перенесена");calendar();
+            await rpcRetry("reschedule_appointment_local",{p_appointment_id:id,p_local_date:cell.dataset.date,p_local_time:time},{attempts:1,timeout:10000});
+            toast("Запись перенесена на "+String(cell.dataset.hour).padStart(2,"0")+":"+String(minute).padStart(2,"0"));
+            calendar();
           }catch(err){toast(friendlyError(err),"error")}
         });
       });
     }
   }
   document.querySelector("#calendarMode").addEventListener("change",e=>{mode=e.target.value;render()});
+  document.querySelector("#calendarGridStep").addEventListener("change",e=>{gridStep=Number(e.target.value);try{localStorage.setItem("lootly_calendar_grid_step",String(gridStep))}catch{}render()});
   document.querySelector("#calendarStaff").addEventListener("change",e=>{staffFilter=e.target.value;render()});
   document.querySelector("#calendarLocation").addEventListener("change",e=>{locationFilter=e.target.value;render()});
   document.querySelector("#calToday").addEventListener("click",()=>{anchor=todayIso();render()});
@@ -510,14 +562,25 @@ async function settings(){
     manager?sb.from("user_invites").select("*").order("created_at",{ascending:false}).limit(20):Promise.resolve({data:[]}),
     sb.from("profiles").select("id,email,role,staff_id,active").order("created_at")
   ]);
+  const loadError=staffRes.error||inviteRes.error||profilesRes.error;
+  if(loadError)return shell("settings","Настройки",'<div class="notice error">'+esc(friendlyError(loadError))+'</div>');
   const staff=staffRes.data||[],invites=inviteRes.data||[],profiles=profilesRes.data||[];
   const team=profiles.map(x=>'<div class="spread" style="padding:12px 0;border-bottom:1px solid var(--line)"><div class="person"><span class="avatar">'+initials(x.email)+'</span><div><b>'+esc(x.email)+'</b><small>'+esc(x.role)+'</small></div></div><span class="status '+(x.active?"confirmed":"canceled")+'">'+(x.active?"Активен":"Выключен")+'</span></div>').join("");
   const inviteForm=manager?'<form id="inviteForm" class="card stack"><div class="card-title"><div><h2>Пригласить в команду</h2><p class="muted tiny">Создайте одноразовую ссылку для администратора или сотрудника.</p></div></div><div class="grid grid-2"><label class="field"><span>Роль</span><select name="role"><option value="admin">Администратор</option><option value="staff">Сотрудник</option></select></label><label class="field"><span>Связать с сотрудником</span><select name="staff"><option value="">Не связывать</option>'+staff.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'</select></label></div><button class="btn brand">Создать ссылку</button><div id="inviteResult"></div></form>':"";
   const inviteList=manager&&invites.length?'<section class="card"><div class="card-title"><h2>Активные приглашения</h2></div>'+invites.map(i=>'<div class="spread" style="padding:10px 0;border-bottom:1px solid var(--line)"><div><b>'+esc(i.role)+'</b><div class="muted tiny">до '+dt(i.expires_at)+'</div></div><button class="btn secondary sm" data-copy-invite="'+i.token+'">Копировать</button></div>').join("")+'</section>':"";
-  const content='<div class="page-head"><div><h1>Настройки</h1><p>Публичные ссылки, команда и доступ.</p></div></div><div class="grid grid-2"><section class="card stack"><div><h2>'+esc(o.name)+'</h2><p class="muted">Организация · '+esc(p.role)+'</p></div><label class="field"><span>Публичная ссылка</span><input id="publicLink" readonly value="'+esc(booking)+'"></label><button class="btn secondary" id="copyPublic">Скопировать ссылку</button></section><section class="card"><h2>Быстрый старт</h2><div class="checklist"><a class="checkitem" href="#/catalog"><span class="checkdot">1</span>Настройте услуги и сотрудников</a><a class="checkitem" href="#/schedule"><span class="checkdot">2</span>Заполните рабочее время</a><a class="checkitem" href="#/widgets"><span class="checkdot">3</span>Создайте виджет для сайта</a></div></section></div><section class="grid grid-2" style="margin-top:16px">'+inviteForm+'<div class="card"><div class="card-title"><h2>Команда</h2></div>'+(team||emptyState("Пока никого","Пригласите первого участника команды."))+'</div></section>'+inviteList;
+  const intervalOptions=[5,10,15,20,30,60].map(v=>'<option value="'+v+'" '+(Number(o.booking_interval_minutes||15)===v?"selected":"")+'>'+v+' минут</option>').join("");
+  const bookingPrefs='<section class="card stack"><div><h2>Онлайн-запись</h2><p class="muted tiny">Шаг определяет, через сколько минут клиенту предлагается следующее возможное начало записи. Длительность услуги не округляется.</p></div><label class="field"><span>Шаг начала записи</span><select id="bookingInterval" '+(manager?"":"disabled")+'>'+intervalOptions+'</select><small>Пример: услуга 1 ч 20 мин и шаг 20 мин → 09:00–10:20, следующий старт может быть 10:20.</small></label>'+(manager?'<button class="btn brand" id="saveBookingInterval">Сохранить шаг записи</button>':'')+'</section>';
+  const content='<div class="page-head"><div><h1>Настройки</h1><p>Онлайн-запись, публичные ссылки, команда и доступ.</p></div></div><div class="grid grid-2"><section class="card stack"><div><h2>'+esc(o.name)+'</h2><p class="muted">Организация · '+esc(p.role)+'</p></div><label class="field"><span>Публичная ссылка</span><input id="publicLink" readonly value="'+esc(booking)+'"></label><button class="btn secondary" id="copyPublic">Скопировать ссылку</button></section>'+bookingPrefs+'</div><section class="grid grid-2" style="margin-top:16px"><section class="card"><h2>Быстрый старт</h2><div class="checklist"><a class="checkitem" href="#/catalog"><span class="checkdot">1</span>Настройте услуги и сотрудников</a><a class="checkitem" href="#/schedule"><span class="checkdot">2</span>Заполните рабочее время</a><a class="checkitem" href="#/widgets"><span class="checkdot">3</span>Создайте виджет для сайта</a></div></section><div class="card"><div class="card-title"><h2>Команда</h2></div>'+(team||emptyState("Пока никого","Пригласите первого участника команды."))+'</div></section><section class="grid grid-2" style="margin-top:16px">'+inviteForm+inviteList+'</section>';
   await shell("settings","Настройки",content);
-  document.querySelector("#copyPublic")?.addEventListener("click",async()=>{await navigator.clipboard.writeText(booking);toast("Ссылка скопирована")});
-  document.querySelector("#inviteForm")?.addEventListener("submit",async e=>{e.preventDefault();const f=new FormData(e.currentTarget),role=f.get("role"),staffId=f.get("staff")||null;if(role==="staff"&&!staffId)return toast("Для роли сотрудника выберите сотрудника","error");const {data,error}=await sb.from("user_invites").insert({organization_id:p.organization_id,role,staff_id:staffId}).select("token").single();if(error)return toast(error.message,"error");const link=location.href.split("#")[0]+"#/join/"+data.token;document.querySelector("#inviteResult").innerHTML='<div class="notice success">Ссылка создана. <button type="button" id="copyNewInvite" class="btn ghost sm">Копировать</button></div>';document.querySelector("#copyNewInvite").onclick=async()=>{await navigator.clipboard.writeText(link);toast("Ссылка приглашения скопирована")}});
+  document.querySelector("#copyPublic")?.addEventListener("click",async()=>{try{await navigator.clipboard.writeText(booking);toast("Ссылка скопирована")}catch{toast("Не удалось скопировать автоматически","error")}});
+  document.querySelector("#saveBookingInterval")?.addEventListener("click",async e=>{
+    const btn=e.currentTarget,minutes=Number(document.querySelector("#bookingInterval").value);
+    btn.disabled=true;btn.textContent="Сохраняем…";
+    try{await rpcRetry("set_booking_interval",{p_minutes:minutes},{attempts:1,timeout:8000});o.booking_interval_minutes=minutes;if(currentOrg)currentOrg.booking_interval_minutes=minutes;toast("Шаг онлайн-записи: "+minutes+" мин")}
+    catch(err){toast(friendlyError(err),"error")}
+    finally{btn.disabled=false;btn.textContent="Сохранить шаг записи"}
+  });
+  document.querySelector("#inviteForm")?.addEventListener("submit",async e=>{e.preventDefault();const f=new FormData(e.currentTarget),role=f.get("role"),staffId=f.get("staff")||null;if(role==="staff"&&!staffId)return toast("Для роли сотрудника выберите сотрудника","error");const {data,error}=await sb.from("user_invites").insert({organization_id:p.organization_id,role,staff_id:staffId}).select("token").single();if(error)return toast(friendlyError(error),"error");const link=location.href.split("#")[0]+"#/join/"+data.token;document.querySelector("#inviteResult").innerHTML='<div class="notice success">Ссылка создана. <button type="button" id="copyNewInvite" class="btn ghost sm">Копировать</button></div>';document.querySelector("#copyNewInvite").onclick=async()=>{await navigator.clipboard.writeText(link);toast("Ссылка приглашения скопирована")}});
   document.querySelectorAll("[data-copy-invite]").forEach(b=>b.addEventListener("click",async()=>{const link=location.href.split("#")[0]+"#/join/"+b.dataset.copyInvite;await navigator.clipboard.writeText(link);toast("Ссылка приглашения скопирована")}));
 }
 
@@ -592,7 +655,7 @@ async function bookingExperience({widgetKey=null,slug=null}){
   const groupedServices=()=>{
     const groups=new Map();
     services.forEach(s=>{const key=s.category_name||"Услуги";if(!groups.has(key))groups.set(key,[]);groups.get(key).push(s)});
-    return [...groups.entries()].map(([name,items])=>'<div style="margin-bottom:18px"><div class="tiny muted" style="font-weight:800;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">'+esc(name)+'</div><div class="option-grid">'+items.map(x=>'<button type="button" class="option '+(state.service?.id===x.id?"active":"")+'" data-service="'+x.id+'"><b>'+esc(x.name)+'</b><small>'+x.duration_minutes+' мин · '+money(x.price)+'</small></button>').join("")+'</div></div>').join("");
+    return [...groups.entries()].map(([name,items])=>'<div style="margin-bottom:18px"><div class="tiny muted" style="font-weight:800;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">'+esc(name)+'</div><div class="option-grid">'+items.map(x=>'<button type="button" class="option '+(state.service?.id===x.id?"active":"")+'" data-service="'+x.id+'"><b>'+esc(x.name)+'</b><small>'+durationLabel(x.duration_minutes)+' · '+money(x.price)+'</small></button>').join("")+'</div></div>').join("");
   };
 
   async function render(){
