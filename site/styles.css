@@ -132,3 +132,8 @@ input:focus,select:focus,textarea:focus{border-color:#818cf8;box-shadow:0 0 0 3p
 .interval-preset{border:1px solid var(--line);background:#fff;color:#475569;border-radius:999px;padding:5px 9px;font-size:11px;font-weight:750;cursor:pointer}
 .interval-preset:hover{border-color:#a5b4fc;color:#4338ca;background:#eef2ff}
 .interval-preset:disabled{opacity:.45;cursor:not-allowed}
+
+.quick-book-mode{display:inline-flex;gap:4px;padding:4px;background:#eef2f7;border-radius:12px;width:max-content;max-width:100%}
+.quick-book-mode button{border:0;background:transparent;color:#64748b;padding:8px 12px;border-radius:9px;font-size:12px;font-weight:750;cursor:pointer}
+.quick-book-mode button.active{background:#fff;color:#0f172a;box-shadow:0 1px 4px rgba(15,23,42,.08)}
+@media(max-width:760px){.quick-book-mode{width:100%}.quick-book-mode button{flex:1}}
