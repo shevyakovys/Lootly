@@ -76,3 +76,26 @@ input:focus,select:focus,textarea:focus{border-color:#818cf8;box-shadow:0 0 0 3p
 .skeleton{border-radius:10px;background:linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 37%,#f1f5f9 63%);background-size:400% 100%;animation:skeleton 1.2s ease infinite}@keyframes skeleton{0%{background-position:100% 0}100%{background-position:0 0}}
 .waitlist-box{margin-top:18px;padding:16px;border:1px dashed #c7d2fe;background:#fafaff;border-radius:14px}
 @media(max-width:760px){.client-hero{grid-template-columns:auto 1fr}.client-hero>.cluster{grid-column:1/-1}.stat-row{grid-template-columns:1fr}.calendar-grid.day{grid-template-columns:58px minmax(560px,1fr)}}
+
+
+/* Widget builder UX */
+.save-state{display:inline-flex;align-items:center;gap:7px;padding:7px 10px;border-radius:999px;font-size:12px;font-weight:750;border:1px solid var(--line);background:#fff;color:#64748b}
+.save-state:before{content:"";width:7px;height:7px;border-radius:50%;background:#94a3b8}
+.save-state.saved{color:#047857;background:#ecfdf5;border-color:#a7f3d0}.save-state.saved:before{background:#10b981}
+.save-state.dirty{color:#9a3412;background:#fff7ed;border-color:#fed7aa}.save-state.dirty:before{background:#f97316}
+.builder-section{padding:18px 0;border-top:1px solid var(--line)}.builder-section:first-of-type{border-top:0;padding-top:0}
+.builder-section-head{display:flex;gap:10px;align-items:flex-start;margin-bottom:14px}.builder-section-head>span{width:28px;height:28px;border-radius:9px;display:grid;place-items:center;background:#eef2ff;color:#4f46e5;font-size:11px;font-weight:850;flex:0 0 auto}.builder-section-head b{display:block;font-size:14px}.builder-section-head small{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+.toggle-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.toggle-card{display:flex;align-items:flex-start;gap:10px;padding:12px;border:1px solid var(--line);border-radius:13px;background:#fff;cursor:pointer}.toggle-card:hover{border-color:#c7d2fe}.toggle-card input{margin-top:2px;width:auto}.toggle-card b{display:block;font-size:12px}.toggle-card small{display:block;color:var(--muted);font-size:11px;margin-top:2px;line-height:1.35}
+.builder-footer{display:flex;justify-content:space-between;gap:12px;align-items:center;padding-top:14px;border-top:1px solid var(--line)}
+.preview-toolbar{display:flex;justify-content:space-between;gap:8px;margin:2px 2px 10px}.segmented{display:flex;gap:3px;background:#111827;border-radius:10px;padding:3px}.segmented button{border:0;background:transparent;color:#94a3b8;padding:6px 8px;border-radius:7px;font-size:10px;font-weight:750;cursor:pointer}.segmented button.active{background:#fff;color:#0f172a}
+.preview-device.mobile{max-width:390px;margin-left:auto;margin-right:auto}.preview-device.mobile .preview-screen{min-height:690px}.preview-device.mobile .option-grid{grid-template-columns:1fr}.preview-device.mobile .slot-grid{grid-template-columns:repeat(3,1fr)}
+.preview-dates{grid-template-columns:repeat(3,1fr)}
+.slot-group{margin-top:12px}.slot-group-title{font-size:11px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.05em;margin:0 0 8px}
+.contact-actions{display:flex;gap:10px;justify-content:space-between}.contact-actions .btn{flex:1}.field-error{font-size:11px;color:#b91c1c;margin-top:5px}.input-invalid{border-color:#fca5a5!important;box-shadow:0 0 0 3px rgba(239,68,68,.08)!important}
+.empty-specialists{padding:18px;border:1px dashed var(--line);border-radius:14px;background:#f8fafc;text-align:center}.empty-specialists b{display:block;margin-bottom:4px}
+.slot-section{margin-top:14px}.slot-section-title{font-size:11px;color:var(--muted);font-weight:850;text-transform:uppercase;letter-spacing:.06em;margin:0 0 8px}
+@media(max-width:760px){
+  .toggle-grid{grid-template-columns:1fr}.builder-footer{align-items:stretch;flex-direction:column}.builder-footer>.cluster{display:grid;grid-template-columns:1fr}.builder-footer>.btn{width:100%}
+  .preview-toolbar{flex-direction:column}.segmented{width:100%}.segmented button{flex:1}
+  .save-state{display:none}
+}
