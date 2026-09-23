@@ -540,7 +540,7 @@ select:disabled{
 }
 .category-label{
   background:#e7f3f1;
-  color:#5c49dd;
+  color:#0f766e;
 }
 .preview-device{
   background:#151b37;
@@ -1461,3 +1461,6 @@ button.btn.brand:disabled{
 .booking-create-card .field>span{
   color:#183a44;
 }
+
+.btn-plus .ui-icon{width:15px;height:15px;stroke-width:2.15}
+.btn-arrow-icon{margin-left:3px}
