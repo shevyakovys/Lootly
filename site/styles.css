@@ -116,3 +116,5 @@ input:focus,select:focus,textarea:focus{border-color:#818cf8;box-shadow:0 0 0 3p
 .schedule-interval>span{font-weight:750;color:#334155}.schedule-off{padding:11px 0;border-bottom:1px solid var(--line);gap:12px}.schedule-off:last-child{border-bottom:0}
 .danger-text{color:#b91c1c!important}
 @media(max-width:760px){.schedule-day{grid-template-columns:58px 1fr}.schedule-interval{width:100%;justify-content:space-between}.schedule-off{align-items:flex-start}}
+
+.cal-event.dragging{opacity:.38;box-shadow:none}.cal-cell.drag-over{background:#eef2ff}.cal-cell.drag-over .cal-subline{background:#dbe4ff}
