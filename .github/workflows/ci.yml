@@ -56,6 +56,8 @@ jobs:
         run: npm install
       - name: Lint
         run: npm run lint
+      - name: Check hosted site JavaScript
+        run: node --check ../site/app.js && node --check ../site/embed.js
       - name: Build
         env:
           NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
