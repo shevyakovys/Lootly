@@ -52,3 +52,11 @@ implementation. The current zero-cost hosted production runtime is Supabase.
 - `docs/DEPLOYMENT_SUPABASE.md`
 - `docs/SUPABASE_SCHEMA.md`
 - `AGENTS.md`
+
+
+## GitHub Pages frontend
+
+The public frontend is deployed from `site/index.html` using GitHub Pages. Supabase remains the backend, auth and database.
+Expected public URL after the Pages workflow succeeds:
+
+`https://shevyakovys.github.io/Lootly/`
