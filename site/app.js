@@ -122,13 +122,83 @@ function appointmentRow(x){return '<tr><td><b>'+dt(x.start_at)+'</b><div class="
 function bindAppointmentActions(){document.querySelectorAll("[data-status]").forEach(b=>b.addEventListener("click",async()=>{const {error}=await sb.rpc("set_appointment_status",{p_appointment_id:b.dataset.status,p_status:b.dataset.to});if(error)toast(error.message,"error");else{toast("Статус обновлён");dashboard()}}))}
 async function renderQuickBooking(){
   const root=document.querySelector("#newBooking");if(!root)return;
-  const [l,s,st,c]=await Promise.all([sb.from("locations").select("*").eq("active",true).order("name"),sb.from("services").select("*").eq("active",true).order("name"),sb.from("staff_members").select("*").eq("active",true).order("name"),sb.from("customers").select("*").order("name")]);
-  const loc=l.data||[],svc=s.data||[],staff=st.data||[],cust=c.data||[];
-  if(!loc.length||!svc.length||!staff.length||!cust.length){root.innerHTML='<div class="card"><h2>Новая запись</h2><p class="muted">Сначала добавьте филиал, услугу, сотрудника и клиента в справочниках.</p><a class="btn secondary" href="#/catalog">Открыть справочники</a></div>';return}
-  root.innerHTML='<form id="quickBook" class="card stack"><div class="card-title"><div><h2>Новая запись</h2><p class="muted tiny">Создание записи администратором</p></div></div><div class="grid grid-4"><label class="field"><span>Филиал</span><select name="location">'+loc.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'</select></label><label class="field"><span>Услуга</span><select name="service">'+svc.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'</select></label><label class="field"><span>Сотрудник</span><select name="staff">'+staff.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'</select></label><label class="field"><span>Клиент</span><select name="customer">'+cust.map(x=>'<option value="'+x.id+'">'+esc(x.name)+' · '+esc(x.phone)+'</option>').join("")+'</select></label></div><div class="grid grid-2"><label class="field"><span>Дата</span><input type="date" name="day" min="'+todayIso()+'" value="'+todayIso()+'"></label><label class="field"><span>Свободное время</span><select name="slot"><option value="">Загрузка...</option></select></label></div><div><button class="btn brand">Создать запись</button></div></form>';
-  const f=document.querySelector("#quickBook"),load=async()=>{const fd=new FormData(f),o=await org();const {data,error}=await sb.rpc("get_public_availability",{p_slug:o.slug,p_location_id:fd.get("location"),p_service_id:fd.get("service"),p_day:fd.get("day"),p_staff_id:fd.get("staff")});f.elements.slot.innerHTML=error?'<option value="">'+esc(error.message)+'</option>':'<option value="">Выберите время</option>'+((data||[]).map(x=>'<option value="'+x.start_at+'">'+new Date(x.start_at).toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"})+'</option>').join(""))};
-  ["location","service","staff","day"].forEach(n=>f.elements[n].addEventListener("change",load));await load();
-  f.addEventListener("submit",async e=>{e.preventDefault();const fd=new FormData(f);if(!fd.get("slot"))return toast("Выберите свободное время","error");const {error}=await sb.rpc("create_admin_booking",{p_location_id:fd.get("location"),p_service_id:fd.get("service"),p_staff_id:fd.get("staff"),p_customer_id:fd.get("customer"),p_start_at:fd.get("slot"),p_note:null,p_booking_key:crypto.randomUUID()});if(error)toast(error.message,"error");else{toast("Запись создана");dashboard()}});
+  const [l,s,custRes]=await Promise.all([
+    sb.from("locations").select("*").eq("active",true).order("name"),
+    sb.from("services").select("*").eq("active",true).order("name"),
+    sb.from("customers").select("*").order("name")
+  ]);
+  const loadError=l.error||s.error||custRes.error;
+  if(loadError){root.innerHTML='<div class="notice error">'+esc(friendlyError(loadError))+'</div>';return}
+  const loc=l.data||[],svc=s.data||[],cust=custRes.data||[];
+  if(!loc.length||!svc.length||!cust.length){
+    root.innerHTML='<div class="card"><h2>Новая запись</h2><p class="muted">Сначала добавьте филиал, услугу и клиента в справочниках.</p><a class="btn secondary" href="#/catalog">Открыть справочники</a></div>';return
+  }
+
+  root.innerHTML='<form id="quickBook" class="card stack"><div class="card-title"><div><h2>Новая запись</h2><p class="muted tiny">Показываем только сотрудников и время, доступные для выбранной услуги.</p></div><span class="status confirmed" id="quickDuration">—</span></div><div class="grid grid-4"><label class="field"><span>Филиал</span><select name="location">'+loc.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'</select></label><label class="field"><span>Услуга</span><select name="service">'+svc.map(x=>'<option value="'+x.id+'">'+esc(x.name)+' · '+durationLabel(x.duration_minutes)+'</option>').join("")+'</select></label><label class="field"><span>Сотрудник</span><select name="staff"><option value="">Загрузка…</option></select></label><label class="field"><span>Клиент</span><select name="customer">'+cust.map(x=>'<option value="'+x.id+'">'+esc(x.name)+' · '+esc(x.phone)+'</option>').join("")+'</select></label></div><div class="grid grid-2"><label class="field"><span>Дата</span><input type="date" name="day"></label><label class="field"><span>Свободное время</span><select name="slot"><option value="">Загрузка…</option></select></label></div><div id="quickBookInfo" class="muted tiny"></div><div><button class="btn brand" id="quickBookSubmit">Создать запись</button></div></form>';
+
+  const f=document.querySelector("#quickBook"),o=await org();
+  let eligibleStaff=[];
+  const dateInZone=(tz)=>{
+    const parts=new Intl.DateTimeFormat("en-CA",{timeZone:tz,year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date());
+    const get=type=>parts.find(x=>x.type===type)?.value;
+    return get("year")+"-"+get("month")+"-"+get("day");
+  };
+  const currentLocation=()=>loc.find(x=>x.id===f.elements.location.value)||loc[0];
+  const formatSlot=(value,tz)=>new Intl.DateTimeFormat("ru-RU",{timeZone:tz,hour:"2-digit",minute:"2-digit"}).format(new Date(value));
+  const setDayForLocation=()=>{
+    const location=currentLocation(),today=dateInZone(location.timezone);
+    f.elements.day.min=today;
+    if(!f.elements.day.value||f.elements.day.value<today)f.elements.day.value=today;
+  };
+  const loadSlots=async()=>{
+    const staffId=f.elements.staff.value,location=currentLocation(),info=document.querySelector("#quickBookInfo"),submit=document.querySelector("#quickBookSubmit");
+    if(!staffId){f.elements.slot.innerHTML='<option value="">Нет доступного сотрудника</option>';submit.disabled=true;return}
+    f.elements.slot.disabled=true;f.elements.slot.innerHTML='<option value="">Загрузка…</option>';submit.disabled=true;
+    const {data,error}=await sb.rpc("get_public_availability",{p_slug:o.slug,p_location_id:location.id,p_service_id:f.elements.service.value,p_day:f.elements.day.value,p_staff_id:staffId});
+    if(error){
+      f.elements.slot.innerHTML='<option value="">Не удалось загрузить время</option>';info.textContent=friendlyError(error);return
+    }
+    const rows=data||[],staffRow=eligibleStaff.find(x=>x.id===staffId),duration=Number(staffRow?.duration_minutes||svc.find(x=>x.id===f.elements.service.value)?.duration_minutes||0);
+    document.querySelector("#quickDuration").textContent=durationLabel(duration);
+    f.elements.slot.innerHTML='<option value="">Выберите время</option>'+rows.map(x=>'<option value="'+x.start_at+'">'+formatSlot(x.start_at,location.timezone)+' – '+formatSlot(x.end_at,location.timezone)+'</option>').join("");
+    f.elements.slot.disabled=!rows.length;submit.disabled=!rows.length;
+    info.textContent=rows.length?"Время показано в часовом поясе филиала: "+location.timezone:"На выбранную дату свободных окон нет.";
+  };
+  const loadStaff=async({resetDay=false}={})=>{
+    const location=currentLocation(),prev=f.elements.staff.value,info=document.querySelector("#quickBookInfo"),submit=document.querySelector("#quickBookSubmit");
+    if(resetDay)setDayForLocation();
+    f.elements.staff.disabled=true;f.elements.staff.innerHTML='<option value="">Загрузка…</option>';f.elements.slot.innerHTML='<option value="">—</option>';submit.disabled=true;
+    try{
+      eligibleStaff=await rpcRetry("get_public_staff",{p_slug:o.slug,p_location_id:location.id,p_service_id:f.elements.service.value},{attempts:2,timeout:8000})||[];
+      f.elements.staff.innerHTML=eligibleStaff.length
+        ? eligibleStaff.map(x=>'<option value="'+x.id+'" '+(x.id===prev?"selected":"")+'>'+esc(x.name)+' · '+durationLabel(x.duration_minutes)+'</option>').join("")
+        : '<option value="">Нет сотрудников для этой услуги</option>';
+      f.elements.staff.disabled=!eligibleStaff.length;
+      if(eligibleStaff.length&&!eligibleStaff.some(x=>x.id===f.elements.staff.value))f.elements.staff.value=eligibleStaff[0].id;
+      info.textContent=eligibleStaff.length?"":"Назначьте услугу сотруднику в разделе «Справочники».";
+      await loadSlots();
+    }catch(err){
+      eligibleStaff=[];f.elements.staff.innerHTML='<option value="">Ошибка загрузки</option>';info.textContent=friendlyError(err);submit.disabled=true;
+    }
+  };
+
+  setDayForLocation();
+  f.elements.location.addEventListener("change",()=>loadStaff({resetDay:true}));
+  f.elements.service.addEventListener("change",()=>loadStaff());
+  f.elements.staff.addEventListener("change",loadSlots);
+  f.elements.day.addEventListener("change",loadSlots);
+  await loadStaff({resetDay:true});
+
+  f.addEventListener("submit",async e=>{
+    e.preventDefault();
+    const fd=new FormData(f),btn=document.querySelector("#quickBookSubmit");
+    if(!fd.get("staff"))return toast("Выберите сотрудника","error");
+    if(!fd.get("slot"))return toast("Выберите свободное время","error");
+    btn.disabled=true;btn.textContent="Создаём…";
+    const {error}=await sb.rpc("create_admin_booking",{p_location_id:fd.get("location"),p_service_id:fd.get("service"),p_staff_id:fd.get("staff"),p_customer_id:fd.get("customer"),p_start_at:fd.get("slot"),p_note:null,p_booking_key:crypto.randomUUID()});
+    if(error){toast(friendlyError(error),"error");btn.disabled=false;btn.textContent="Создать запись"}
+    else{toast("Запись создана");dashboard()}
+  });
 }
 
 async function catalog(){
