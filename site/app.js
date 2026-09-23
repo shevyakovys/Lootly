@@ -613,11 +613,27 @@ async function bookingExperience({widgetKey=null,slug=null}){
   else rpcRetry("track_public_booking_view",{p_slug:data.organization.slug,p_session_key:sk},{attempts:1,timeout:4000}).catch(()=>{});
   if(widgetKey)window.parent?.postMessage({type:"lootly:ready",widgetKey},"*");
 
-  const state={
-    location:locs.length===1?locs[0]:null,
-    service:services.length===1?services[0]:null,
-    staff:null,staffList:[],staffLoaded:false,date:todayIso(),slots:[],slotsLoadedFor:null,slot:null,index:0,busy:false,loadError:null,contact:{name:"",phone:"",email:""}
+  const isoDateInZone=(date,tz)=>{
+    const parts=new Intl.DateTimeFormat("en-CA",{timeZone:tz||"UTC",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(date);
+    const get=type=>parts.find(x=>x.type===type)?.value;
+    return get("year")+"-"+get("month")+"-"+get("day");
   };
+  const addIsoDays=(iso,days)=>{const d=new Date(iso+"T12:00:00Z");d.setUTCDate(d.getUTCDate()+days);return d.toISOString().slice(0,10)};
+  const initialLocation=locs.length===1?locs[0]:null;
+  const state={
+    location:initialLocation,
+    service:services.length===1?services[0]:null,
+    staff:null,staffList:[],staffLoaded:false,
+    date:initialLocation?isoDateInZone(new Date(),initialLocation.timezone):todayIso(),
+    dateOffset:0,slots:[],slotsLoadedFor:null,slot:null,index:0,busy:false,loadError:null,contact:{name:"",phone:"",email:""}
+  };
+  const bookingTz=()=>state.location?.timezone||locs[0]?.timezone||"UTC";
+  const slotTime=value=>new Intl.DateTimeFormat("ru-RU",{timeZone:bookingTz(),hour:"2-digit",minute:"2-digit"}).format(new Date(value));
+  const slotHour=value=>{
+    const part=new Intl.DateTimeFormat("en-US",{timeZone:bookingTz(),hour:"2-digit",hourCycle:"h23"}).formatToParts(new Date(value)).find(x=>x.type==="hour");
+    return Number(part?.value||0);
+  };
+  const slotDateTime=value=>new Intl.DateTimeFormat("ru-RU",{timeZone:bookingTz(),day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}).format(new Date(value));
 
   let steps=(cfg.step_order||["location","service","staff","datetime"]).filter(x=>x!=="staff"||cfg.show_staff_step);
   steps=steps.filter((x,i,a)=>a.indexOf(x)===i);
@@ -650,7 +666,10 @@ async function bookingExperience({widgetKey=null,slug=null}){
       state.slotsLoadedFor=loadKey;
     }catch(err){state.loadError=friendlyError(err);state.slots=[];throw err}
   }
-  const dateChips=()=>Array.from({length:7},(_,i)=>{const x=new Date();x.setDate(x.getDate()+i);const iso=localIsoDate(x);return '<button type="button" class="date-chip '+(state.date===iso?"active":"")+'" data-date="'+iso+'"><span>'+x.toLocaleDateString("ru-RU",{weekday:"short"})+'</span><b>'+x.getDate()+'</b></button>'}).join("");
+  const dateChips=()=>{
+    const base=addIsoDays(isoDateInZone(new Date(),bookingTz()),state.dateOffset);
+    return Array.from({length:7},(_,i)=>{const iso=addIsoDays(base,i),x=new Date(iso+"T12:00:00Z");return '<button type="button" class="date-chip '+(state.date===iso?"active":"")+'" data-date="'+iso+'"><span>'+x.toLocaleDateString("ru-RU",{weekday:"short",timeZone:"UTC"})+'</span><b>'+x.getUTCDate()+'</b></button>'}).join("");
+  };
   const staffVisual=x=>x.avatar_url?'<img class="staff-photo" src="'+esc(x.avatar_url)+'" alt="" loading="lazy">':'<span class="avatar">'+initials(x.name)+'</span>';
   const groupedServices=()=>{
     const groups=new Map();
@@ -680,15 +699,17 @@ async function bookingExperience({widgetKey=null,slug=null}){
       let slotsPart="";
       if(state.loadError)slotsPart='<div class="notice error">'+esc(state.loadError)+'</div><button type="button" class="btn secondary" id="retrySlots">Повторить загрузку</button>';
       else if(state.slots.length){
-        const groups=[["Утро",x=>new Date(x.start_at).getHours()<12],["Днём",x=>{const h=new Date(x.start_at).getHours();return h>=12&&h<17}],["Вечером",x=>new Date(x.start_at).getHours()>=17]];
-        slotsPart=groups.map(([title,test])=>{const items=state.slots.map((x,i)=>({x,i})).filter(({x})=>test(x));return items.length?'<div class="slot-section"><div class="slot-section-title">'+title+'</div><div class="slot-grid">'+items.map(({x,i})=>'<button type="button" class="slot '+(state.slot===i?"active":"")+'" data-slot="'+i+'">'+new Date(x.start_at).toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"})+'</button>').join("")+'</div></div>':""}).join("");
+        const groups=[["Утро",x=>slotHour(x.start_at)<12],["Днём",x=>{const h=slotHour(x.start_at);return h>=12&&h<17}],["Вечером",x=>slotHour(x.start_at)>=17]];
+        slotsPart=groups.map(([title,test])=>{const items=state.slots.map((x,i)=>({x,i})).filter(({x})=>test(x));return items.length?'<div class="slot-section"><div class="slot-section-title">'+title+'</div><div class="slot-grid">'+items.map(({x,i})=>'<button type="button" class="slot '+(state.slot===i?"active":"")+'" data-slot="'+i+'">'+slotTime(x.start_at)+'</button>').join("")+'</div></div>':""}).join("");
       }
       else slotsPart='<div class="muted" style="padding:18px 0">На этот день свободных окон нет.</div>'+(widgetKey&&cfg.waitlist_enabled?'<div class="waitlist-box"><b>Хотите, чтобы вам написали при появлении окна?</b><p class="muted tiny">Оставьте контакты — заявка попадёт администратору.</p><form id="waitlistForm" class="stack"><input name="name" placeholder="Имя" required><input name="phone" type="tel" placeholder="Телефон" required><input name="email" type="email" placeholder="Email — необязательно"><button class="btn secondary">Встать в лист ожидания</button><div id="waitlistResult"></div></form></div>':"");
-      body='<div class="date-strip">'+dateChips()+'</div>'+slotsPart;
+      const windowStart=addIsoDays(isoDateInZone(new Date(),bookingTz()),state.dateOffset),windowEnd=addIsoDays(windowStart,6);
+      const windowLabel=new Date(windowStart+"T12:00:00Z").toLocaleDateString("ru-RU",{day:"numeric",month:"short",timeZone:"UTC"})+" — "+new Date(windowEnd+"T12:00:00Z").toLocaleDateString("ru-RU",{day:"numeric",month:"short",timeZone:"UTC"});
+      body='<div class="booking-date-nav"><button type="button" class="btn ghost sm" id="datePrev" '+(state.dateOffset===0?"disabled":"")+'>←</button><b>'+windowLabel+'</b><button type="button" class="btn ghost sm" id="dateNext" '+(state.dateOffset>=77?"disabled":"")+'>→</button></div><div class="date-strip">'+dateChips()+'</div>'+slotsPart;
     }
     if(step==="contact"){
       const chosen=state.slots[state.slot];
-      body='<form id="contactForm" class="stack"><div class="summary"><b>'+esc(state.service?.name||"")+'</b><div class="muted tiny" style="margin-top:4px">'+esc(state.location?.name||"")+' · '+(chosen?dt(chosen.start_at):"")+(state.staff?" · "+esc(state.staff.name):"")+'</div></div><label class="field"><span>Ваше имя</span><input name="name" autocomplete="name" value="'+esc(state.contact.name)+'" required><span class="field-error" data-error="name"></span></label><label class="field"><span>Телефон</span><input name="phone" type="tel" inputmode="tel" autocomplete="tel" value="'+esc(state.contact.phone)+'" placeholder="+7 999 000-00-00" required><span class="field-error" data-error="phone"></span></label><label class="field"><span>Email <span class="muted">(необязательно)</span></span><input name="email" type="email" autocomplete="email" value="'+esc(state.contact.email)+'"><span class="field-error" data-error="email"></span></label><div class="contact-actions"><button type="button" class="btn secondary" id="contactBack">Назад</button><button class="btn brand" id="bookSubmit" style="background:'+cfg.primary_color+'">Подтвердить запись</button></div><div id="bookResult"></div></form>';
+      body='<form id="contactForm" class="stack"><div class="summary"><b>'+esc(state.service?.name||"")+'</b><div class="muted tiny" style="margin-top:4px">'+esc(state.location?.name||"")+' · '+(chosen?slotDateTime(chosen.start_at):"")+(state.staff?" · "+esc(state.staff.name):"")+'</div></div><label class="field"><span>Ваше имя</span><input name="name" autocomplete="name" value="'+esc(state.contact.name)+'" required><span class="field-error" data-error="name"></span></label><label class="field"><span>Телефон</span><input name="phone" type="tel" inputmode="tel" autocomplete="tel" value="'+esc(state.contact.phone)+'" placeholder="+7 999 000-00-00" required><span class="field-error" data-error="phone"></span></label><label class="field"><span>Email <span class="muted">(необязательно)</span></span><input name="email" type="email" autocomplete="email" value="'+esc(state.contact.email)+'"><span class="field-error" data-error="email"></span></label><div class="contact-actions"><button type="button" class="btn secondary" id="contactBack">Назад</button><button class="btn brand" id="bookSubmit" style="background:'+cfg.primary_color+'">Подтвердить запись</button></div><div id="bookResult"></div></form>';
     }
 
     const titles={location:"Выберите филиал",service:"Выберите услугу",staff:"К кому записаться?",datetime:"Выберите время",contact:"Контактные данные"};
@@ -696,9 +717,11 @@ async function bookingExperience({widgetKey=null,slug=null}){
     app.innerHTML='<div class="booking-shell" style="--accent:'+esc(cfg.primary_color)+'"><div class="booking-card"><div class="booking-head"><div class="spread"><div><div class="tiny muted">'+esc(data.organization.name)+'</div><h2 style="margin:5px 0 0">'+esc(cfg.title||"Онлайн-запись")+'</h2></div><span class="tiny muted">'+(state.index+1)+'/'+steps.length+'</span></div><p class="muted tiny" style="margin-top:7px">'+esc(cfg.subtitle||"")+'</p></div><div class="stepbar"><span style="width:'+Math.round((state.index+1)/steps.length*100)+'%"></span></div><div class="booking-body"><div style="padding-top:22px"><h2>'+titles[step]+'</h2><p class="muted">'+subs[step]+'</p>'+body+'</div>'+(step!=="contact"?'<div class="booking-actions">'+(state.index?'<button class="btn secondary" id="back">Назад</button>':'<span></span>')+'<button class="btn brand" id="next" style="background:'+cfg.primary_color+'" '+((step==="datetime"&&!state.slots.length)?"disabled":"")+'>Продолжить</button></div>':'')+(cfg.show_branding?'<div class="tiny muted" style="text-align:center;margin-top:24px">Powered by Lootly</div>':'')+'</div></div></div>';
 
     document.querySelector("#back")?.addEventListener("click",()=>{state.index=Math.max(0,state.index-1);state.loadError=null;render()});
-    document.querySelectorAll("[data-location]").forEach(b=>b.addEventListener("click",()=>{state.location=locs.find(x=>x.id===b.dataset.location);state.staff=null;state.staffList=[];state.staffLoaded=false;state.slots=[];state.slotsLoadedFor=null;state.loadError=null;render()}));
+    document.querySelectorAll("[data-location]").forEach(b=>b.addEventListener("click",()=>{state.location=locs.find(x=>x.id===b.dataset.location);state.dateOffset=0;state.date=isoDateInZone(new Date(),bookingTz());state.staff=null;state.staffList=[];state.staffLoaded=false;state.slots=[];state.slotsLoadedFor=null;state.loadError=null;render()}));
     document.querySelectorAll("[data-service]").forEach(b=>b.addEventListener("click",()=>{state.service=services.find(x=>x.id===b.dataset.service);state.staff=null;state.staffList=[];state.staffLoaded=false;state.slots=[];state.slotsLoadedFor=null;state.loadError=null;render()}));
     document.querySelectorAll("[data-staff]").forEach(b=>b.addEventListener("click",()=>{state.staff=b.dataset.staff?state.staffList.find(x=>x.id===b.dataset.staff):null;state.slots=[];state.slotsLoadedFor=null;state.loadError=null;render()}));
+    document.querySelector("#datePrev")?.addEventListener("click",()=>{state.dateOffset=Math.max(0,state.dateOffset-7);state.date=addIsoDays(isoDateInZone(new Date(),bookingTz()),state.dateOffset);state.slots=[];state.slotsLoadedFor=null;state.loadError=null;render()});
+    document.querySelector("#dateNext")?.addEventListener("click",()=>{state.dateOffset=Math.min(77,state.dateOffset+7);state.date=addIsoDays(isoDateInZone(new Date(),bookingTz()),state.dateOffset);state.slots=[];state.slotsLoadedFor=null;state.loadError=null;render()});
     document.querySelectorAll("[data-date]").forEach(b=>b.addEventListener("click",async()=>{state.date=b.dataset.date;state.slots=[];state.slotsLoadedFor=null;state.loadError=null;try{await slotsLoad()}catch{}render()}));
     document.querySelectorAll("[data-slot]").forEach(b=>b.addEventListener("click",()=>{state.slot=Number(b.dataset.slot);render()}));
     document.querySelector("#retryStaff")?.addEventListener("click",async()=>{state.loadError=null;state.staffList=[];state.staffLoaded=false;render()});
@@ -752,7 +775,7 @@ async function bookingExperience({widgetKey=null,slug=null}){
           : await rpcRetry("create_public_booking",args,{attempts:1,timeout:12000});
         if(widgetKey)rpcRetry("track_widget_event",{p_public_key:widgetKey,p_session_key:sk,p_event_type:"booking"},{attempts:1,timeout:4000}).catch(()=>{});
         if(widgetKey)window.parent?.postMessage({type:"lootly:booking-complete",widgetKey,bookingId:booking.id,startAt:booking.start_at},"*");
-        app.innerHTML='<div class="booking-shell" style="--accent:'+esc(cfg.primary_color)+'"><div class="booking-card"><div class="booking-body" style="padding-top:60px;text-align:center"><div style="width:64px;height:64px;border-radius:50%;background:var(--success-soft);color:var(--success);display:grid;place-items:center;font-size:30px;margin:0 auto 18px">✓</div><h1>Вы записаны</h1><p class="muted">'+esc(state.service.name)+' · '+dt(booking.start_at)+'</p><div class="summary" style="margin-top:22px;text-align:left"><b>'+esc(data.organization.name)+'</b><div class="muted tiny" style="margin-top:5px">'+esc(state.location.name)+'</div></div>'+(cfg.show_branding?'<div class="tiny muted" style="margin-top:26px">Powered by Lootly</div>':'')+'</div></div></div>';
+        app.innerHTML='<div class="booking-shell" style="--accent:'+esc(cfg.primary_color)+'"><div class="booking-card"><div class="booking-body" style="padding-top:60px;text-align:center"><div style="width:64px;height:64px;border-radius:50%;background:var(--success-soft);color:var(--success);display:grid;place-items:center;font-size:30px;margin:0 auto 18px">✓</div><h1>Вы записаны</h1><p class="muted">'+esc(state.service.name)+' · '+slotDateTime(booking.start_at)+'</p><div class="summary" style="margin-top:22px;text-align:left"><b>'+esc(data.organization.name)+'</b><div class="muted tiny" style="margin-top:5px">'+esc(state.location.name)+'</div></div>'+(cfg.show_branding?'<div class="tiny muted" style="margin-top:26px">Powered by Lootly</div>':'')+'</div></div></div>';
       }catch(err){
         const message=friendlyError(err);
         if(String(err?.message||"").toLowerCase().includes("no longer available")){
