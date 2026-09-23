@@ -124,3 +124,18 @@ Required:
 - pytest;
 - frontend ESLint;
 - frontend production build.
+
+
+## Free hosted production profile
+
+The current zero-cost production runtime uses Supabase rather than a continuously running FastAPI
+container:
+
+- Supabase PostgreSQL;
+- Supabase Auth;
+- RLS for tenant isolation;
+- PostgreSQL RPC for booking invariants and availability;
+- Supabase Edge Function for the static/hash-routed web UI.
+
+The self-hosted Python/FastAPI implementation remains supported as a reference deployment, while
+Supabase is the active public deployment.
