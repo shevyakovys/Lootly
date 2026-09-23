@@ -300,20 +300,35 @@ async function calendar(){
     });
 
     if(manager){
-      grid.querySelectorAll(".cal-event[draggable=true]").forEach(ev=>ev.addEventListener("dragstart",e=>{e.dataTransfer.setData("text/plain",ev.dataset.appointment);e.dataTransfer.effectAllowed="move"}));
+      grid.querySelectorAll(".cal-event[draggable=true]").forEach(ev=>ev.addEventListener("dragstart",e=>{
+        const rect=ev.getBoundingClientRect();
+        const appointment=all.find(x=>x.id===ev.dataset.appointment);
+        const duration=Number(appointment?.duration_minutes||60);
+        const grabMinutes=Math.max(0,Math.min(duration-1,((e.clientY-rect.top)/hourHeight)*60));
+        e.dataTransfer.setData("text/plain",JSON.stringify({id:ev.dataset.appointment,grabMinutes}));
+        e.dataTransfer.effectAllowed="move";
+        requestAnimationFrame(()=>ev.classList.add("dragging"));
+      }));
+      grid.querySelectorAll(".cal-event[draggable=true]").forEach(ev=>ev.addEventListener("dragend",()=>ev.classList.remove("dragging")));
       grid.querySelectorAll(".cal-cell").forEach(cell=>{
         cell.addEventListener("dragover",e=>{e.preventDefault();cell.classList.add("drag-over")});
         cell.addEventListener("dragleave",()=>cell.classList.remove("drag-over"));
         cell.addEventListener("drop",async e=>{
           e.preventDefault();cell.classList.remove("drag-over");
-          const id=e.dataTransfer.getData("text/plain");if(!id)return;
+          let payload={id:"",grabMinutes:0};
+          try{payload=JSON.parse(e.dataTransfer.getData("text/plain"))}catch{payload.id=e.dataTransfer.getData("text/plain")}
+          if(!payload.id)return;
           const rect=cell.getBoundingClientRect();
-          const rawMinute=Math.max(0,Math.min(59,((e.clientY-rect.top)/rect.height)*60));
-          const minute=Math.min(60-gridStep,Math.floor(rawMinute/gridStep)*gridStep);
-          const time=String(cell.dataset.hour).padStart(2,"0")+":"+String(minute).padStart(2,"0")+":00";
+          const pointerMinutes=Math.max(0,Math.min(59.999,((e.clientY-rect.top)/rect.height)*60));
+          const rawStart=Number(cell.dataset.hour)*60+pointerMinutes-Number(payload.grabMinutes||0);
+          const snapped=Math.round(rawStart/gridStep)*gridStep;
+          const minTotal=startHour*60,maxTotal=endHour*60-gridStep;
+          const totalMinutes=Math.max(minTotal,Math.min(maxTotal,snapped));
+          const targetHour=Math.floor(totalMinutes/60),minute=totalMinutes%60;
+          const time=String(targetHour).padStart(2,"0")+":"+String(minute).padStart(2,"0")+":00";
           try{
-            await rpcRetry("reschedule_appointment_local",{p_appointment_id:id,p_local_date:cell.dataset.date,p_local_time:time},{attempts:1,timeout:10000});
-            toast("Запись перенесена на "+String(cell.dataset.hour).padStart(2,"0")+":"+String(minute).padStart(2,"0"));
+            await rpcRetry("reschedule_appointment_local",{p_appointment_id:payload.id,p_local_date:cell.dataset.date,p_local_time:time},{attempts:1,timeout:10000});
+            toast("Запись перенесена на "+String(targetHour).padStart(2,"0")+":"+String(minute).padStart(2,"0"));
             calendar();
           }catch(err){toast(friendlyError(err),"error")}
         });
