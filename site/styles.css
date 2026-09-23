@@ -142,3 +142,7 @@ input:focus,select:focus,textarea:focus{border-color:#818cf8;box-shadow:0 0 0 3p
 .calendar-reschedule>div:first-child b{display:block;font-size:13px}.calendar-reschedule>div:first-child span{display:block;margin-top:3px}
 
 .slot b{display:block;font-size:12px;line-height:1.1}.slot span{display:block;margin-top:3px;font-size:10px;color:#64748b}.slot.active span{color:rgba(255,255,255,.82)}
+
+.cal-unavailable{background:#f8fafc}
+.cal-off-band{position:absolute;left:0;right:0;background:rgba(148,163,184,.09);pointer-events:none;z-index:0}
+.cal-unavailable:after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(-45deg,transparent,transparent 7px,rgba(148,163,184,.07) 7px,rgba(148,163,184,.07) 8px);pointer-events:none}
