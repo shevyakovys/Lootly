@@ -147,6 +147,106 @@ async function catalog(){
 function entityCard(tab,x){if(tab==="customers")return '<div class="spread" style="padding:13px 0;border-bottom:1px solid var(--line)"><div class="person"><span class="avatar">'+initials(x.name)+'</span><div><a href="#/client/'+x.id+'"><b>'+esc(x.name)+'</b></a><small>'+esc(x.phone)+' · '+esc(x.email||"без email")+'</small></div></div><span class="muted tiny">'+esc(x.note||"")+'</span></div>';if(tab==="services")return '<div class="spread" style="padding:13px 0;border-bottom:1px solid var(--line)"><div><b>'+esc(x.name)+'</b><div class="muted tiny">'+x.duration_minutes+' мин</div></div><b>'+money(x.price)+'</b></div>';if(tab==="staff")return '<div class="spread" style="padding:13px 0;border-bottom:1px solid var(--line)"><div class="person"><span class="avatar">'+initials(x.name)+'</span><div><b>'+esc(x.name)+'</b><small>'+(x.active?"Активен":"Неактивен")+'</small></div></div></div>';return '<div class="spread" style="padding:13px 0;border-bottom:1px solid var(--line)"><div><b>'+esc(x.name)+'</b><div class="muted tiny">'+esc(x.address||"Адрес не указан")+' · '+esc(x.timezone||"")+'</div></div></div>'}
 function bindAddEntity(tab,p,data){document.querySelector("#addEntity")?.addEventListener("submit",async e=>{e.preventDefault();const f=new FormData(e.currentTarget);let table,payload;if(tab==="services"){table="services";payload={organization_id:p.organization_id,name:f.get("name"),duration_minutes:Number(f.get("duration")),price:f.get("price")}}else if(tab==="staff"){table="staff_members";payload={organization_id:p.organization_id,name:f.get("name"),location_id:f.get("location")}}else if(tab==="locations"){table="locations";payload={organization_id:p.organization_id,name:f.get("name"),timezone:f.get("timezone"),address:f.get("address")||null}}else{table="customers";payload={organization_id:p.organization_id,name:f.get("name"),phone:f.get("phone"),email:f.get("email")||null,note:f.get("note")||null}}const {error}=await sb.from(table).insert(payload);if(error)toast(error.message,"error");else{toast("Добавлено");catalog()}})}
 
+
+function localDateParts(value,timeZone){
+  const parts=new Intl.DateTimeFormat("en-CA",{timeZone,year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(new Date(value));
+  const get=t=>parts.find(x=>x.type===t)?.value||"";
+  return {date:get("year")+"-"+get("month")+"-"+get("day"),hour:Number(get("hour")),minute:Number(get("minute"))};
+}
+function addDaysIso(iso,delta){const d=new Date(iso+"T12:00:00");d.setDate(d.getDate()+delta);return d.toISOString().slice(0,10)}
+function weekStartIso(iso){const d=new Date(iso+"T12:00:00"),wd=(d.getDay()+6)%7;d.setDate(d.getDate()-wd);return d.toISOString().slice(0,10)}
+
+async function calendar(){
+  if(!await requireAuth())return;
+  const p=await profile(),manager=["owner","admin"].includes(p.role);
+  const [apptRes,staffRes,locRes]=await Promise.all([
+    sb.from("appointments").select("*,customers(name,phone),services(name),staff_members(name),locations(name,timezone)").order("start_at",{ascending:true}).limit(500),
+    sb.from("staff_members").select("id,name").eq("active",true).order("name"),
+    sb.from("locations").select("id,name,timezone").eq("active",true).order("name")
+  ]);
+  if(apptRes.error)return shell("calendar","Календарь",'<div class="notice error">'+esc(apptRes.error.message)+'</div>');
+  const all=apptRes.data||[],staff=staffRes.data||[],locations=locRes.data||[];
+  let mode="week",anchor=todayIso(),staffFilter="",locationFilter="";
+
+  const content='<div class="page-head"><div><h1>Календарь</h1><p>Рабочая неделя, загрузка команды и быстрый перенос записей.</p></div><div class="cluster"><select id="calendarMode" style="width:auto"><option value="week">Неделя</option><option value="day">День</option></select><select id="calendarLocation" style="width:auto"><option value="">Все филиалы</option>'+locations.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'</select><select id="calendarStaff" style="width:auto"><option value="">Все сотрудники</option>'+staff.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'</select></div></div><div class="calendar-toolbar"><div class="cluster"><button class="btn secondary sm" id="calPrev">←</button><button class="btn secondary sm" id="calToday">Сегодня</button><button class="btn secondary sm" id="calNext">→</button></div><b id="calendarPeriod"></b><span class="muted tiny">'+(manager?"Перетащите запись на другой час, чтобы перенести.":"Календарь доступен только для просмотра.")+'</span></div><div class="calendar-grid week" id="calendarGrid"></div>';
+  await shell("calendar","Календарь",content);
+
+  function render(){
+    const grid=document.querySelector("#calendarGrid");
+    const start=mode==="week"?weekStartIso(anchor):anchor;
+    const days=Array.from({length:mode==="week"?7:1},(_,i)=>addDaysIso(start,i));
+    const hours=Array.from({length:13},(_,i)=>8+i);
+    grid.className="calendar-grid "+mode;
+    document.querySelector("#calendarPeriod").textContent=mode==="week"
+      ? new Date(days[0]+"T12:00:00").toLocaleDateString("ru-RU",{day:"numeric",month:"short"})+" — "+new Date(days[days.length-1]+"T12:00:00").toLocaleDateString("ru-RU",{day:"numeric",month:"short",year:"numeric"})
+      : new Date(anchor+"T12:00:00").toLocaleDateString("ru-RU",{weekday:"long",day:"numeric",month:"long"});
+
+    let html='<div class="cal-head"></div>'+days.map(x=>'<div class="cal-head">'+new Date(x+"T12:00:00").toLocaleDateString("ru-RU",{weekday:"short",day:"numeric",month:"short"})+'</div>').join("");
+    for(const hour of hours){
+      html+='<div class="cal-time">'+String(hour).padStart(2,"0")+':00</div>';
+      for(const date of days)html+='<div class="cal-cell" data-date="'+date+'" data-hour="'+hour+'"></div>';
+    }
+    grid.innerHTML=html;
+
+    const filtered=all.filter(a=>(!staffFilter||a.staff_id===staffFilter)&&(!locationFilter||a.location_id===locationFilter));
+    filtered.forEach(a=>{
+      const tz=a.locations?.timezone||Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const lp=localDateParts(a.start_at,tz);
+      if(!days.includes(lp.date)||lp.hour<8||lp.hour>20)return;
+      const cell=grid.querySelector('.cal-cell[data-date="'+lp.date+'"][data-hour="'+lp.hour+'"]');
+      if(!cell)return;
+      const ev=document.createElement("div");
+      ev.className="cal-event "+a.status;
+      ev.draggable=manager&&["booked","confirmed"].includes(a.status);
+      ev.dataset.appointment=a.id;
+      const height=Math.max(42,Math.min(180,(Number(a.duration_minutes||60)/60)*64-7));
+      ev.style.top=(4+(lp.minute/60)*64)+"px";ev.style.height=height+"px";
+      ev.innerHTML='<b>'+String(lp.hour).padStart(2,"0")+':'+String(lp.minute).padStart(2,"0")+' · '+esc(a.customers?.name||"Клиент")+'</b><span>'+esc(a.services?.name||"")+' · '+esc(a.staff_members?.name||"")+'</span>';
+      ev.title=(a.customers?.name||"")+" · "+(a.services?.name||"")+" · "+statusLabel(a.status);
+      cell.append(ev);
+    });
+
+    if(manager){
+      grid.querySelectorAll(".cal-event[draggable=true]").forEach(ev=>ev.addEventListener("dragstart",e=>{e.dataTransfer.setData("text/plain",ev.dataset.appointment);e.dataTransfer.effectAllowed="move"}));
+      grid.querySelectorAll(".cal-cell").forEach(cell=>{
+        cell.addEventListener("dragover",e=>{e.preventDefault();cell.classList.add("drag-over")});
+        cell.addEventListener("dragleave",()=>cell.classList.remove("drag-over"));
+        cell.addEventListener("drop",async e=>{
+          e.preventDefault();cell.classList.remove("drag-over");
+          const id=e.dataTransfer.getData("text/plain");if(!id)return;
+          const hour=String(cell.dataset.hour).padStart(2,"0")+":00:00";
+          try{
+            await rpcRetry("reschedule_appointment_local",{p_appointment_id:id,p_local_date:cell.dataset.date,p_local_time:hour});
+            toast("Запись перенесена");calendar();
+          }catch(err){toast(friendlyError(err),"error")}
+        });
+      });
+    }
+  }
+  document.querySelector("#calendarMode").addEventListener("change",e=>{mode=e.target.value;render()});
+  document.querySelector("#calendarStaff").addEventListener("change",e=>{staffFilter=e.target.value;render()});
+  document.querySelector("#calendarLocation").addEventListener("change",e=>{locationFilter=e.target.value;render()});
+  document.querySelector("#calToday").addEventListener("click",()=>{anchor=todayIso();render()});
+  document.querySelector("#calPrev").addEventListener("click",()=>{anchor=addDaysIso(anchor,mode==="week"?-7:-1);render()});
+  document.querySelector("#calNext").addEventListener("click",()=>{anchor=addDaysIso(anchor,mode==="week"?7:1);render()});
+  render();
+}
+
+async function clientDetail(id){
+  if(!await requireAuth())return;
+  const p=await profile(),manager=["owner","admin"].includes(p.role);
+  const [custRes,apptRes]=await Promise.all([
+    sb.from("customers").select("*").eq("id",id).single(),
+    sb.from("appointments").select("*,services(name),staff_members(name),locations(name)").eq("customer_id",id).order("start_at",{ascending:false}).limit(200)
+  ]);
+  if(custRes.error)return shell("catalog","Клиент",'<div class="notice error">'+esc(custRes.error.message)+'</div>');
+  const c=custRes.data,visits=apptRes.data||[],completed=visits.filter(x=>x.status==="completed"),spent=completed.reduce((s,x)=>s+Number(x.price||0),0),next=visits.filter(x=>new Date(x.start_at)>new Date()&&["booked","confirmed"].includes(x.status)).sort((a,b)=>new Date(a.start_at)-new Date(b.start_at))[0];
+  const rows=visits.map(x=>'<tr><td>'+dt(x.start_at)+'</td><td>'+esc(x.services?.name||"—")+'</td><td>'+esc(x.staff_members?.name||"—")+'</td><td>'+money(x.price)+'</td><td><span class="status '+x.status+'">'+statusLabel(x.status)+'</span></td></tr>').join("");
+  const content='<div class="page-head"><div><a class="muted tiny" href="#/catalog">← Назад к клиентам</a></div></div><section class="card"><div class="client-hero"><div class="client-avatar">'+initials(c.name)+'</div><div><h1 style="margin-bottom:6px">'+esc(c.name)+'</h1><div class="muted">'+esc(c.phone)+(c.email?" · "+esc(c.email):"")+'</div></div><div class="cluster"><a class="btn brand" href="#/dashboard">+ Новая запись</a></div></div><div class="stat-row" style="margin-top:20px"><div class="stat-box"><b>'+visits.length+'</b><span>визитов всего</span></div><div class="stat-box"><b>'+money(spent)+'</b><span>сумма завершённых</span></div><div class="stat-box"><b>'+(next?day(next.start_at):"—")+'</b><span>следующий визит</span></div></div></section><div class="grid grid-2" style="margin-top:16px"><section class="card stack"><div class="card-title"><h2>Заметка</h2></div><textarea id="clientNote" '+(manager?"":"readonly")+' placeholder="Предпочтения, важные детали...">'+esc(c.note||"")+'</textarea>'+(manager?'<button class="btn secondary" id="saveClientNote">Сохранить заметку</button>':"")+'</section><section class="card"><div class="card-title"><h2>Контакты</h2></div><div class="stack"><div><span class="muted tiny">Телефон</span><div><b>'+esc(c.phone)+'</b></div></div><div><span class="muted tiny">Email</span><div><b>'+esc(c.email||"Не указан")+'</b></div></div><div><span class="muted tiny">Клиент с</span><div><b>'+new Date(c.created_at).toLocaleDateString("ru-RU")+'</b></div></div></div></section></div><section class="card flush" style="margin-top:16px"><div class="card-title" style="padding:18px 18px 0"><h2>История визитов</h2></div><div class="table-wrap"><table class="table"><thead><tr><th>Дата</th><th>Услуга</th><th>Сотрудник</th><th>Сумма</th><th>Статус</th></tr></thead><tbody>'+(rows||'<tr><td colspan="5">'+emptyState("Истории пока нет","После первой записи здесь появится история клиента.")+'</td></tr>')+'</tbody></table></div></section>';
+  await shell("catalog","Карточка клиента",content);
+  document.querySelector("#saveClientNote")?.addEventListener("click",async()=>{const note=document.querySelector("#clientNote").value.trim();const {error}=await sb.from("customers").update({note}).eq("id",id);if(error)toast(error.message,"error");else toast("Заметка сохранена")});
+}
+
 async function schedule(){
   if(!await requireAuth())return;const p=await profile(),manager=["owner","admin"].includes(p.role);const {data:staff,error}=await sb.from("staff_members").select("*").eq("active",true).order("name");if(error)return shell("schedule","Расписание",'<div class="notice error">'+esc(error.message)+'</div>');
   const content='<div class="page-head"><div><h1>Расписание</h1><p>Рабочие часы и исключения по каждому сотруднику.</p></div></div>'+(staff?.length?'<div class="grid grid-3" id="staffSelector">'+staff.map((x,i)=>'<button class="card '+(i===0?"soft":"")+'" data-staff="'+x.id+'" style="text-align:left"><div class="person"><span class="avatar">'+initials(x.name)+'</span><div><b>'+esc(x.name)+'</b><small>Открыть график</small></div></div></button>').join("")+'</div><section id="schedulePane" style="margin-top:16px"></section>':emptyState("Нет сотрудников","Добавьте сотрудника в справочниках.","<a class='btn brand' href='#/catalog'>Добавить сотрудника</a>"));
@@ -233,6 +333,8 @@ async function route(){
     if(parts[0]==="widget"&&parts[1])return publicWidget(parts[1]);
     if(parts[0]==="book"&&parts[1])return publicBook(parts[1]);
     if(parts[0]==="dashboard")return dashboard();
+    if(parts[0]==="calendar")return calendar();
+    if(parts[0]==="client"&&parts[1])return clientDetail(parts[1]);
     if(parts[0]==="catalog")return catalog();
     if(parts[0]==="schedule")return schedule();
     if(parts[0]==="widgets")return widgets();
