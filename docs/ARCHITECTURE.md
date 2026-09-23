@@ -128,3 +128,24 @@ flowchart LR
 Booking concurrency is enforced in PostgreSQL with a GiST exclusion constraint for active
 appointments. Public clients never receive database secrets; they use the publishable key and only
 narrow public RPC functions. Administrative table access is restricted by RLS.
+
+
+## Widget architecture
+
+```mermaid
+flowchart LR
+    Host[Customer website] --> JS[GitHub Pages embed.js]
+    JS --> CFG[get_public_widget RPC]
+    JS --> Frame[GitHub Pages widget iframe]
+    Frame --> Staff[get_public_widget_staff]
+    Frame --> Slots[get_public_widget_availability]
+    Frame --> Book[create_public_widget_booking]
+    CFG --> DB[(Supabase PostgreSQL)]
+    Staff --> DB
+    Slots --> DB
+    Book --> DB
+```
+
+Each widget has a public UUID identifier. The identifier selects configuration but is not an
+authorization secret. Tenant authorization for editing uses authenticated profiles/RLS, while public
+booking RPCs enforce widget scopes explicitly.

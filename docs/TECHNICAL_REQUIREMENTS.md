@@ -139,3 +139,17 @@ container:
 
 The self-hosted Python/FastAPI implementation remains supported as a reference deployment, while
 Supabase is the active public deployment.
+
+
+## Embeddable booking widget
+
+Active zero-cost production exposes an embeddable widget through GitHub Pages and Supabase RPC.
+
+- `booking_widgets` stores tenant-scoped widget configuration and a non-secret public UUID key.
+- Widget configuration is editable only by owner/admin under RLS.
+- Public RPC returns only safe presentation/configuration fields.
+- Location/service/staff restrictions are revalidated in public RPC and booking creation.
+- Availability for "any staff" is constrained by the widget's staff scope.
+- `site/embed.js` creates the floating launcher and drawer/modal iframe.
+- The iframe runtime is `#/widget/{public_key}`.
+- The Supabase publishable key may be present in browser code; service-role secrets must never be exposed.
