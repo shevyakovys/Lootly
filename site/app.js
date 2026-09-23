@@ -168,7 +168,7 @@ async function renderQuickBooking(){
     const staffId=f.elements.staff.value,location=currentLocation(),info=document.querySelector("#quickBookInfo"),submit=document.querySelector("#quickBookSubmit");
     if(!staffId){f.elements.slot.innerHTML='<option value="">Нет доступного сотрудника</option>';submit.disabled=true;return}
     f.elements.slot.disabled=true;f.elements.slot.innerHTML='<option value="">Загрузка…</option>';submit.disabled=true;
-    const {data,error}=await sb.rpc("get_public_availability",{p_slug:o.slug,p_location_id:location.id,p_service_id:f.elements.service.value,p_day:f.elements.day.value,p_staff_id:staffId});
+    const {data,error}=await sb.rpc("get_admin_availability",{p_location_id:location.id,p_service_id:f.elements.service.value,p_day:f.elements.day.value,p_staff_id:staffId});
     if(error){
       f.elements.slot.innerHTML='<option value="">Не удалось загрузить время</option>';info.textContent=friendlyError(error);return
     }
