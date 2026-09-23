@@ -43,8 +43,8 @@
   const style=document.createElement("style");style.textContent=`
     :host{all:initial}
     @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.045)}}@keyframes enter{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-    *{box-sizing:border-box}.launcher{position:fixed;z-index:2147483000;border:0;border-radius:999px;padding:14px 20px;font:700 15px/1 system-ui,-apple-system,sans-serif;color:#fff;box-shadow:0 14px 36px rgba(15,23,42,.22);cursor:pointer;transition:.18s;white-space:nowrap}.launcher:hover{transform:translateY(-2px)}.launcher:focus-visible{outline:3px solid rgba(99,102,241,.3);outline-offset:3px}
-    .overlay{position:fixed;inset:0;z-index:2147482999;background:rgba(15,23,42,.42);backdrop-filter:blur(3px);display:flex;animation:enter .18s ease}.panel{position:relative;background:#fff;overflow:hidden;box-shadow:0 24px 80px rgba(15,23,42,.28);animation:enter .2s ease}.panel iframe{display:block;width:100%;height:100%;border:0;background:#fff}.close{position:absolute;right:12px;top:12px;z-index:2;width:38px;height:38px;border:0;border-radius:50%;background:rgba(15,23,42,.78);color:#fff;font:24px/1 system-ui;cursor:pointer}.fallback{position:fixed;left:16px;right:16px;bottom:16px;max-width:420px;margin:auto;padding:12px 14px;border-radius:14px;background:#fff;color:#0f172a;box-shadow:0 18px 50px rgba(15,23,42,.22);font:13px/1.4 system-ui;z-index:2147483000}.fallback a{display:inline-block;margin-top:8px;font-weight:700;color:#4f46e5}
+    *{box-sizing:border-box}.launcher{position:fixed;z-index:2147483000;border:0;border-radius:999px;padding:14px 20px;font:700 15px/1 system-ui,-apple-system,sans-serif;color:#fff;box-shadow:0 14px 36px rgba(15,23,42,.22);cursor:pointer;transition:.18s;white-space:nowrap}.launcher:hover{transform:translateY(-2px)}.launcher:focus-visible{outline:3px solid rgba(15,118,110,.20);outline-offset:3px}
+    .overlay{position:fixed;inset:0;z-index:2147482999;background:rgba(8,30,36,.34);backdrop-filter:blur(10px);display:flex;animation:enter .18s ease}.panel{position:relative;background:rgba(248,253,252,.90);overflow:hidden;border:1px solid rgba(135,170,175,.24);box-shadow:0 26px 86px rgba(11,43,50,.24);backdrop-filter:blur(24px);animation:enter .2s ease}.panel iframe{display:block;width:100%;height:100%;border:0;background:#fff}.close{position:absolute;right:12px;top:12px;z-index:2;width:38px;height:38px;border:0;border-radius:50%;background:rgba(10,48,53,.78);color:#fff;font:24px/1 system-ui;cursor:pointer}.fallback{position:fixed;left:16px;right:16px;bottom:16px;max-width:420px;margin:auto;padding:12px 14px;border-radius:14px;background:rgba(250,254,253,.92);color:#14343c;border:1px solid rgba(127,160,166,.22);box-shadow:0 18px 50px rgba(11,43,50,.18);backdrop-filter:blur(18px);font:13px/1.4 system-ui;z-index:2147483000}.fallback a{display:inline-block;margin-top:8px;font-weight:700;color:#0f766e}
     @media(max-width:640px){.panel{width:100%!important;height:100%!important;max-width:none!important;border-radius:0!important}.launcher{max-width:calc(100vw - 32px)}}
     @media(prefers-reduced-motion:reduce){.launcher,.overlay,.panel{animation:none!important;transition:none!important}}
   `;shadow.append(style);document.body.append(host);
@@ -56,7 +56,7 @@
   };
 
   const mountFallback=(message)=>{
-    const button=document.createElement("button");button.className="launcher";button.textContent="Онлайн-запись";button.style.background="#4f46e5";positionButton(button,"bottom-right");
+    const button=document.createElement("button");button.className="launcher";button.textContent="Онлайн-запись";button.style.background="#0f766e";positionButton(button,"bottom-right");
     button.addEventListener("click",()=>window.open(WEB_URL+encodeURIComponent(key),"_blank","noopener"));
     shadow.append(button);
     emit("lootly:error",{stage:"init",message});
