@@ -134,18 +134,19 @@ async function renderQuickBooking(){
 async function catalog(){
   if(!await requireAuth())return;
   const p=await profile(),manager=["owner","admin"].includes(p.role);
-  const [l,s,st,cust,cat]=await Promise.all([
+  const [l,s,st,cust,cat,ss]=await Promise.all([
     sb.from("locations").select("*").order("name"),
     sb.from("services").select("*,service_categories(name)").order("name"),
     sb.from("staff_members").select("*").order("name"),
     sb.from("customers").select("*").order("created_at",{ascending:false}),
-    sb.from("service_categories").select("*").order("sort_order").order("name")
+    sb.from("service_categories").select("*").order("sort_order").order("name"),
+    sb.from("staff_services").select("*")
   ]);
-  const err=l.error||s.error||st.error||cust.error||cat.error;
+  const err=l.error||s.error||st.error||cust.error||cat.error||ss.error;
   if(err)return shell("catalog","Справочники",'<div class="notice error">'+esc(friendlyError(err))+'</div>');
   const content='<div class="page-head"><div><h1>Справочники</h1><p>Услуги, команда, филиалы и клиентская база.</p></div></div><div class="tabs" id="catalogTabs"><button class="tab active" data-tab="services">Услуги '+(s.data?.length||0)+'</button><button class="tab" data-tab="staff">Сотрудники '+(st.data?.length||0)+'</button><button class="tab" data-tab="locations">Филиалы '+(l.data?.length||0)+'</button><button class="tab" data-tab="customers">Клиенты '+(cust.data?.length||0)+'</button></div><section id="catalogPane" style="margin-top:16px"></section>';
   await shell("catalog","Справочники",content);
-  const data={services:s.data||[],staff:st.data||[],locations:l.data||[],customers:cust.data||[],categories:cat.data||[]};
+  const data={services:s.data||[],staff:st.data||[],locations:l.data||[],customers:cust.data||[],categories:cat.data||[],assignments:ss.data||[]};
 
   const render=tab=>{
     document.querySelectorAll("#catalogTabs .tab").forEach(x=>x.classList.toggle("active",x.dataset.tab===tab));
@@ -154,7 +155,7 @@ async function catalog(){
     const minuteOptions=Array.from({length:60},(_,i)=>'<option value="'+i+'">'+String(i).padStart(2,"0")+' мин</option>').join("");
     const forms={
       services:'<div class="grid grid-2"><form id="addEntity" class="card stack"><input type="hidden" name="entity_id"><div class="card-title"><div><h2 id="serviceFormTitle">Новая услуга</h2><p class="muted tiny">Длительность хранится точно в минутах и определяет реальный конец записи.</p></div></div><div class="grid grid-2"><label class="field"><span>Название</span><input name="name" required></label><label class="field"><span>Категория</span><select name="category">'+categoryOptions+'</select></label></div><div class="duration-editor"><label class="field"><span>Часы</span><input name="duration_hours" type="number" value="1" min="0" max="24" step="1"></label><label class="field"><span>Минуты</span><select name="duration_minutes_part">'+minuteOptions+'</select></label><label class="field"><span>Цена</span><input name="price" type="number" value="0" min="0" step=".01"></label></div><div class="grid grid-2"><label class="field"><span>Статус</span><select name="active"><option value="true">Активна</option><option value="false">Выключена</option></select></label><div class="notice info duration-hint">Например, 1 ч 20 мин = запись займёт ровно 80 минут. Шаг начала записи настраивается отдельно.</div></div><div class="cluster"><button class="btn brand" id="serviceSubmit">Добавить услугу</button><button type="button" class="btn secondary hidden" id="cancelServiceEdit">Отмена</button></div></form><form id="categoryForm" class="card stack"><div><h2>Категории</h2><p class="muted tiny">Помогают структурировать каталог и форму онлайн-записи.</p></div><label class="field"><span>Название категории</span><input name="name" placeholder="Стрижки, массаж, консультации" required></label><button class="btn secondary">Добавить категорию</button><div class="scope-pills">'+data.categories.map(x=>'<span class="category-label">'+esc(x.name)+'</span>').join("")+'</div></form></div>',
-      staff:'<div class="grid grid-2"><form id="addEntity" class="card stack"><h2>Новый сотрудник</h2><label class="field"><span>Имя</span><input name="name" required></label><label class="field"><span>Филиал</span><select name="location">'+data.locations.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'</select></label><label class="field"><span>Фото — URL</span><input name="avatar_url" type="url" placeholder="https://..."><small>Можно оставить пустым — покажем инициалы.</small></label><button class="btn brand">Добавить сотрудника</button></form><form id="assignService" class="card stack"><h2>Назначить услугу</h2><label class="field"><span>Сотрудник</span><select name="staff">'+data.staff.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'</select></label><label class="field"><span>Услуга</span><select name="service">'+data.services.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'</select></label><button class="btn secondary">Назначить</button><p class="muted tiny">Без назначения сотрудник не появится для этой услуги в онлайн-записи.</p></form></div>',
+      staff:'<div class="grid grid-2"><form id="addEntity" class="card stack"><h2>Новый сотрудник</h2><label class="field"><span>Имя</span><input name="name" required></label><label class="field"><span>Филиал</span><select name="location">'+data.locations.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'</select></label><label class="field"><span>Фото — URL</span><input name="avatar_url" type="url" placeholder="https://..."><small>Можно оставить пустым — покажем инициалы.</small></label><button class="btn brand">Добавить сотрудника</button></form><form id="assignService" class="card stack"><div><h2>Услуга сотрудника</h2><p class="muted tiny">Назначьте услугу и при необходимости задайте персональную длительность.</p></div><label class="field"><span>Сотрудник</span><select name="staff">'+data.staff.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'</select></label><label class="field"><span>Услуга</span><select name="service">'+data.services.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'</select></label><label class="field"><span>Длительность</span><select name="duration_mode"><option value="default">Как у услуги</option><option value="custom">Индивидуальная</option></select></label><div id="staffDurationFields" class="duration-editor compact hidden"><label class="field"><span>Часы</span><input name="duration_hours" type="number" min="0" max="24" value="1"></label><label class="field"><span>Минуты</span><select name="duration_minutes_part">'+minuteOptions+'</select></label></div><div id="staffServiceHint" class="notice info">Используется длительность услуги.</div><button class="btn secondary">Назначить / сохранить</button></form></div>',
       locations:'<form id="addEntity" class="card stack"><h2>Новый филиал</h2><div class="grid grid-3"><label class="field"><span>Название</span><input name="name" required></label><label class="field"><span>Timezone</span><input name="timezone" value="Europe/Moscow"></label><label class="field"><span>Адрес</span><input name="address"></label></div><button class="btn brand">Добавить филиал</button></form>',
       customers:'<form id="addEntity" class="card stack"><h2>Новый клиент</h2><div class="grid grid-3"><label class="field"><span>Имя</span><input name="name" required></label><label class="field"><span>Телефон</span><input name="phone" required></label><label class="field"><span>Email</span><input name="email" type="email"></label></div><label class="field"><span>Заметка</span><textarea name="note"></textarea></label><button class="btn brand">Добавить клиента</button></form>'
     };
@@ -202,7 +203,43 @@ async function catalog(){
         document.querySelector("#categoryForm")?.addEventListener("submit",async e=>{e.preventDefault();const f=new FormData(e.currentTarget),name=String(f.get("name")).trim();if(!name)return;const {error}=await sb.from("service_categories").insert({organization_id:p.organization_id,name});if(error)toast(friendlyError(error),"error");else{toast("Категория добавлена");catalog()}});
       }
       if(tab==="staff"){
-        document.querySelector("#assignService")?.addEventListener("submit",async e=>{e.preventDefault();const f=new FormData(e.currentTarget);const {error}=await sb.from("staff_services").insert({staff_id:f.get("staff"),service_id:f.get("service")});if(error&&error.code!=="23505")toast(friendlyError(error),"error");else toast("Услуга назначена")});
+        const assignmentForm=document.querySelector("#assignService");
+        const syncAssignment=()=>{
+          if(!assignmentForm)return;
+          const staffId=assignmentForm.elements.staff.value,serviceId=assignmentForm.elements.service.value;
+          const service=data.services.find(x=>x.id===serviceId);
+          const assignment=data.assignments.find(x=>x.staff_id===staffId&&x.service_id===serviceId);
+          const override=Number(assignment?.duration_override_minutes||0);
+          assignmentForm.elements.duration_mode.value=override>0?"custom":"default";
+          assignmentForm.elements.duration_hours.value=String(Math.floor((override||Number(service?.duration_minutes||60))/60));
+          assignmentForm.elements.duration_minutes_part.value=String((override||Number(service?.duration_minutes||60))%60);
+          const fields=document.querySelector("#staffDurationFields"),hint=document.querySelector("#staffServiceHint");
+          fields?.classList.toggle("hidden",assignmentForm.elements.duration_mode.value!=="custom");
+          if(hint)hint.innerHTML=override>0
+            ?"Индивидуально: <b>"+durationLabel(override)+"</b>. Базовая услуга: "+durationLabel(service?.duration_minutes||0)+"."
+            :"Используется длительность услуги: <b>"+durationLabel(service?.duration_minutes||0)+"</b>.";
+        };
+        assignmentForm?.elements.staff.addEventListener("change",syncAssignment);
+        assignmentForm?.elements.service.addEventListener("change",syncAssignment);
+        assignmentForm?.elements.duration_mode.addEventListener("change",()=>{
+          document.querySelector("#staffDurationFields")?.classList.toggle("hidden",assignmentForm.elements.duration_mode.value!=="custom");
+        });
+        assignmentForm?.addEventListener("submit",async e=>{
+          e.preventDefault();const f=new FormData(e.currentTarget);
+          let override=null;
+          if(f.get("duration_mode")==="custom"){
+            override=Number(f.get("duration_hours")||0)*60+Number(f.get("duration_minutes_part")||0);
+            if(override<1||override>1440)return toast("Проверьте индивидуальную длительность","error");
+          }
+          const payload={staff_id:f.get("staff"),service_id:f.get("service"),duration_override_minutes:override};
+          const {data:row,error}=await sb.from("staff_services").upsert(payload,{onConflict:"staff_id,service_id"}).select("*").single();
+          if(error)return toast(friendlyError(error),"error");
+          const idx=data.assignments.findIndex(x=>x.staff_id===row.staff_id&&x.service_id===row.service_id);
+          if(idx>=0)data.assignments[idx]=row;else data.assignments.push(row);
+          toast(override?"Индивидуальная длительность сохранена":"Услуга назначена с базовой длительностью");
+          syncAssignment();
+        });
+        syncAssignment();
       }
     }
   };
@@ -775,7 +812,7 @@ async function bookingExperience({widgetKey=null,slug=null}){
     if(step==="staff"){
       if(state.loadError)body='<div class="notice error">'+esc(state.loadError)+'</div><button type="button" class="btn secondary" id="retryStaff">Повторить</button>';
       else if(!state.staffList.length&&!cfg.allow_any_staff)body='<div class="empty-specialists"><b>Нет доступных специалистов</b><span class="muted tiny">Для выбранных услуги и филиала сейчас никто не доступен. Вернитесь назад и измените выбор.</span></div>';
-      else body='<div class="option-grid">'+(cfg.allow_any_staff?'<button type="button" class="option '+(!state.staff?"active":"")+'" data-staff=""><div class="person"><span class="avatar">★</span><div><b>Любой специалист</b><small>Подберём ближайшее время</small></div></div></button>':"")+state.staffList.map(x=>'<button type="button" class="option '+(state.staff?.id===x.id?"active":"")+'" data-staff="'+x.id+'"><div class="person">'+staffVisual(x)+'<div><b>'+esc(x.name)+'</b><small>Специалист</small></div></div></button>').join("")+'</div>';
+      else body='<div class="option-grid">'+(cfg.allow_any_staff?'<button type="button" class="option '+(!state.staff?"active":"")+'" data-staff=""><div class="person"><span class="avatar">★</span><div><b>Любой специалист</b><small>Подберём ближайшее время</small></div></div></button>':"")+state.staffList.map(x=>'<button type="button" class="option '+(state.staff?.id===x.id?"active":"")+'" data-staff="'+x.id+'"><div class="person">'+staffVisual(x)+'<div><b>'+esc(x.name)+'</b><small>Специалист · '+durationLabel(x.duration_minutes||state.service?.duration_minutes)+'</small></div></div></button>').join("")+'</div>';
     }
     if(step==="datetime"){
       let slotsPart="";
