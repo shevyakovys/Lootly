@@ -127,26 +127,68 @@ async function renderQuickBooking(){
 }
 
 async function catalog(){
-  if(!await requireAuth())return;const p=await profile(),manager=["owner","admin"].includes(p.role);
-  const [l,s,st,c]=await Promise.all([sb.from("locations").select("*").order("name"),sb.from("services").select("*").order("name"),sb.from("staff_members").select("*").order("name"),sb.from("customers").select("*").order("created_at",{ascending:false})]);
-  const content='<div class="page-head"><div><h1>Справочники</h1><p>Филиалы, услуги, команда и клиентская база.</p></div></div><div class="tabs" id="catalogTabs"><button class="tab active" data-tab="services">Услуги '+(s.data?.length||0)+'</button><button class="tab" data-tab="staff">Сотрудники '+(st.data?.length||0)+'</button><button class="tab" data-tab="locations">Филиалы '+(l.data?.length||0)+'</button><button class="tab" data-tab="customers">Клиенты '+(c.data?.length||0)+'</button></div><section id="catalogPane" style="margin-top:16px"></section>';
+  if(!await requireAuth())return;
+  const p=await profile(),manager=["owner","admin"].includes(p.role);
+  const [l,s,st,c,cat]=await Promise.all([
+    sb.from("locations").select("*").order("name"),
+    sb.from("services").select("*,service_categories(name)").order("name"),
+    sb.from("staff_members").select("*").order("name"),
+    sb.from("customers").select("*").order("created_at",{ascending:false}),
+    sb.from("service_categories").select("*").order("sort_order").order("name")
+  ]);
+  const content='<div class="page-head"><div><h1>Справочники</h1><p>Услуги, команда, филиалы и клиентская база.</p></div></div><div class="tabs" id="catalogTabs"><button class="tab active" data-tab="services">Услуги '+(s.data?.length||0)+'</button><button class="tab" data-tab="staff">Сотрудники '+(st.data?.length||0)+'</button><button class="tab" data-tab="locations">Филиалы '+(l.data?.length||0)+'</button><button class="tab" data-tab="customers">Клиенты '+(c.data?.length||0)+'</button></div><section id="catalogPane" style="margin-top:16px"></section>';
   await shell("catalog","Справочники",content);
-  const data={services:s.data||[],staff:st.data||[],locations:l.data||[],customers:c.data||[]};
-  const render=tab=>{document.querySelectorAll("#catalogTabs .tab").forEach(x=>x.classList.toggle("active",x.dataset.tab===tab));const pane=document.querySelector("#catalogPane");const forms={
-    services:'<form id="addEntity" class="card stack"><h2>Новая услуга</h2><div class="grid grid-3"><label class="field"><span>Название</span><input name="name" required></label><label class="field"><span>Длительность</span><input name="duration" type="number" value="60" min="1"></label><label class="field"><span>Цена</span><input name="price" type="number" value="0" min="0" step=".01"></label></div><button class="btn brand">Добавить услугу</button></form>',
-    staff:'<div class="grid grid-2"><form id="addEntity" class="card stack"><h2>Новый сотрудник</h2><div class="grid grid-2"><label class="field"><span>Имя</span><input name="name" required></label><label class="field"><span>Филиал</span><select name="location">'+data.locations.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'</select></label></div><button class="btn brand">Добавить сотрудника</button></form><form id="assignService" class="card stack"><h2>Назначить услугу</h2><label class="field"><span>Сотрудник</span><select name="staff">'+data.staff.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'</select></label><label class="field"><span>Услуга</span><select name="service">'+data.services.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'</select></label><button class="btn secondary">Назначить</button><p class="muted tiny">Сотрудник появится в онлайн-записи только для назначенных ему услуг.</p></form></div>',
-    locations:'<form id="addEntity" class="card stack"><h2>Новый филиал</h2><div class="grid grid-3"><label class="field"><span>Название</span><input name="name" required></label><label class="field"><span>Timezone</span><input name="timezone" value="Europe/Moscow"></label><label class="field"><span>Адрес</span><input name="address"></label></div><button class="btn brand">Добавить филиал</button></form>',
-    customers:'<form id="addEntity" class="card stack"><h2>Новый клиент</h2><div class="grid grid-3"><label class="field"><span>Имя</span><input name="name" required></label><label class="field"><span>Телефон</span><input name="phone" required></label><label class="field"><span>Email</span><input name="email" type="email"></label></div><label class="field"><span>Заметка</span><textarea name="note"></textarea></label><button class="btn brand">Добавить клиента</button></form>'};
-    const cards=data[tab].map(x=>entityCard(tab,x)).join("");
-    pane.innerHTML=(manager?forms[tab]:"")+'<div class="card" style="margin-top:16px"><div class="card-title"><h2>'+({services:"Услуги",staff:"Сотрудники",locations:"Филиалы",customers:"Клиенты"}[tab])+'</h2><div class="search"><input id="entitySearch" placeholder="Поиск"></div></div><div id="entityList">'+(cards||emptyState("Пока пусто","Добавьте первую запись в этот справочник."))+'</div></div>';
-    document.querySelector("#entitySearch")?.addEventListener("input",e=>{const q=e.target.value.toLowerCase();const rows=data[tab].filter(x=>JSON.stringify(x).toLowerCase().includes(q));document.querySelector("#entityList").innerHTML=rows.length?rows.map(x=>entityCard(tab,x)).join(""):emptyState("Ничего не найдено","Попробуйте другой запрос.")});
-    if(manager){bindAddEntity(tab,p,data);if(tab==="staff"){document.querySelector("#assignService")?.addEventListener("submit",async e=>{e.preventDefault();const f=new FormData(e.currentTarget);const {error}=await sb.from("staff_services").insert({staff_id:f.get("staff"),service_id:f.get("service")});if(error&&error.code!=="23505")toast(error.message,"error");else toast("Услуга назначена")})}}
-  };
-  document.querySelectorAll("#catalogTabs .tab").forEach(b=>b.addEventListener("click",()=>render(b.dataset.tab)));render("services");
-}
-function entityCard(tab,x){if(tab==="customers")return '<div class="spread" style="padding:13px 0;border-bottom:1px solid var(--line)"><div class="person"><span class="avatar">'+initials(x.name)+'</span><div><a href="#/client/'+x.id+'"><b>'+esc(x.name)+'</b></a><small>'+esc(x.phone)+' · '+esc(x.email||"без email")+'</small></div></div><span class="muted tiny">'+esc(x.note||"")+'</span></div>';if(tab==="services")return '<div class="spread" style="padding:13px 0;border-bottom:1px solid var(--line)"><div><b>'+esc(x.name)+'</b><div class="muted tiny">'+x.duration_minutes+' мин</div></div><b>'+money(x.price)+'</b></div>';if(tab==="staff")return '<div class="spread" style="padding:13px 0;border-bottom:1px solid var(--line)"><div class="person"><span class="avatar">'+initials(x.name)+'</span><div><b>'+esc(x.name)+'</b><small>'+(x.active?"Активен":"Неактивен")+'</small></div></div></div>';return '<div class="spread" style="padding:13px 0;border-bottom:1px solid var(--line)"><div><b>'+esc(x.name)+'</b><div class="muted tiny">'+esc(x.address||"Адрес не указан")+' · '+esc(x.timezone||"")+'</div></div></div>'}
-function bindAddEntity(tab,p,data){document.querySelector("#addEntity")?.addEventListener("submit",async e=>{e.preventDefault();const f=new FormData(e.currentTarget);let table,payload;if(tab==="services"){table="services";payload={organization_id:p.organization_id,name:f.get("name"),duration_minutes:Number(f.get("duration")),price:f.get("price")}}else if(tab==="staff"){table="staff_members";payload={organization_id:p.organization_id,name:f.get("name"),location_id:f.get("location")}}else if(tab==="locations"){table="locations";payload={organization_id:p.organization_id,name:f.get("name"),timezone:f.get("timezone"),address:f.get("address")||null}}else{table="customers";payload={organization_id:p.organization_id,name:f.get("name"),phone:f.get("phone"),email:f.get("email")||null,note:f.get("note")||null}}const {error}=await sb.from(table).insert(payload);if(error)toast(error.message,"error");else{toast("Добавлено");catalog()}})}
+  const data={services:s.data||[],staff:st.data||[],locations:l.data||[],customers:c.data||[],categories:cat.data||[]};
 
+  const render=tab=>{
+    document.querySelectorAll("#catalogTabs .tab").forEach(x=>x.classList.toggle("active",x.dataset.tab===tab));
+    const pane=document.querySelector("#catalogPane");
+    const categoryOptions='<option value="">Без категории</option>'+data.categories.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("");
+    const forms={
+      services:'<div class="grid grid-2"><form id="addEntity" class="card stack"><div class="card-title"><div><h2>Новая услуга</h2><p class="muted tiny">Цена и длительность фиксируются в записи как snapshot.</p></div></div><div class="grid grid-2"><label class="field"><span>Название</span><input name="name" required></label><label class="field"><span>Категория</span><select name="category">'+categoryOptions+'</select></label><label class="field"><span>Длительность</span><input name="duration" type="number" value="60" min="1"></label><label class="field"><span>Цена</span><input name="price" type="number" value="0" min="0" step=".01"></label></div><button class="btn brand">Добавить услугу</button></form><form id="categoryForm" class="card stack"><div><h2>Категории</h2><p class="muted tiny">Помогают структурировать каталог и форму онлайн-записи.</p></div><label class="field"><span>Название категории</span><input name="name" placeholder="Стрижки, массаж, консультации" required></label><button class="btn secondary">Добавить категорию</button><div class="scope-pills">'+data.categories.map(x=>'<span class="category-label">'+esc(x.name)+'</span>').join("")+'</div></form></div>',
+      staff:'<div class="grid grid-2"><form id="addEntity" class="card stack"><h2>Новый сотрудник</h2><label class="field"><span>Имя</span><input name="name" required></label><label class="field"><span>Филиал</span><select name="location">'+data.locations.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'</select></label><label class="field"><span>Фото — URL</span><input name="avatar_url" type="url" placeholder="https://..."><small>Можно оставить пустым — покажем инициалы.</small></label><button class="btn brand">Добавить сотрудника</button></form><form id="assignService" class="card stack"><h2>Назначить услугу</h2><label class="field"><span>Сотрудник</span><select name="staff">'+data.staff.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'</select></label><label class="field"><span>Услуга</span><select name="service">'+data.services.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'</select></label><button class="btn secondary">Назначить</button><p class="muted tiny">Без назначения сотрудник не появится для этой услуги в онлайн-записи.</p></form></div>',
+      locations:'<form id="addEntity" class="card stack"><h2>Новый филиал</h2><div class="grid grid-3"><label class="field"><span>Название</span><input name="name" required></label><label class="field"><span>Timezone</span><input name="timezone" value="Europe/Moscow"></label><label class="field"><span>Адрес</span><input name="address"></label></div><button class="btn brand">Добавить филиал</button></form>',
+      customers:'<form id="addEntity" class="card stack"><h2>Новый клиент</h2><div class="grid grid-3"><label class="field"><span>Имя</span><input name="name" required></label><label class="field"><span>Телефон</span><input name="phone" required></label><label class="field"><span>Email</span><input name="email" type="email"></label></div><label class="field"><span>Заметка</span><textarea name="note"></textarea></label><button class="btn brand">Добавить клиента</button></form>'
+    };
+    const filters=tab==="services"?'<div class="cluster"><div class="search"><input id="entitySearch" placeholder="Поиск"></div><select id="categoryFilter" style="width:auto"><option value="">Все категории</option>'+data.categories.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'</select></div>':'<div class="search"><input id="entitySearch" placeholder="Поиск"></div>';
+    const renderRows=()=>{
+      const q=(document.querySelector("#entitySearch")?.value||"").toLowerCase(),catId=document.querySelector("#categoryFilter")?.value||"";
+      const rows=data[tab].filter(x=>JSON.stringify(x).toLowerCase().includes(q)&&(!catId||x.category_id===catId));
+      document.querySelector("#entityList").innerHTML=rows.length?rows.map(x=>entityCard(tab,x)).join(""):emptyState("Ничего не найдено","Измените поиск или фильтр.");
+    };
+    const cards=data[tab].map(x=>entityCard(tab,x)).join("");
+    pane.innerHTML=(manager?forms[tab]:"")+'<div class="card" style="margin-top:16px"><div class="card-title"><h2>'+({services:"Услуги",staff:"Сотрудники",locations:"Филиалы",customers:"Клиенты"}[tab])+'</h2>'+filters+'</div><div id="entityList">'+(cards||emptyState("Пока пусто","Добавьте первую запись в этот справочник."))+'</div></div>';
+    document.querySelector("#entitySearch")?.addEventListener("input",renderRows);
+    document.querySelector("#categoryFilter")?.addEventListener("change",renderRows);
+    if(manager){
+      bindAddEntity(tab,p,data);
+      if(tab==="services"){
+        document.querySelector("#categoryForm")?.addEventListener("submit",async e=>{e.preventDefault();const f=new FormData(e.currentTarget),name=String(f.get("name")).trim();if(!name)return;const {error}=await sb.from("service_categories").insert({organization_id:p.organization_id,name});if(error)toast(error.message,"error");else{toast("Категория добавлена");catalog()}});
+      }
+      if(tab==="staff"){
+        document.querySelector("#assignService")?.addEventListener("submit",async e=>{e.preventDefault();const f=new FormData(e.currentTarget);const {error}=await sb.from("staff_services").insert({staff_id:f.get("staff"),service_id:f.get("service")});if(error&&error.code!=="23505")toast(error.message,"error");else toast("Услуга назначена")});
+      }
+    }
+  };
+  document.querySelectorAll("#catalogTabs .tab").forEach(b=>b.addEventListener("click",()=>render(b.dataset.tab)));
+  render("services");
+}
+function entityCard(tab,x){
+  if(tab==="customers")return '<div class="spread" style="padding:13px 0;border-bottom:1px solid var(--line)"><div class="person"><span class="avatar">'+initials(x.name)+'</span><div><a href="#/client/'+x.id+'"><b>'+esc(x.name)+'</b></a><small>'+esc(x.phone)+' · '+esc(x.email||"без email")+'</small></div></div><span class="muted tiny">'+esc(x.note||"")+'</span></div>';
+  if(tab==="services")return '<div class="spread" style="padding:13px 0;border-bottom:1px solid var(--line)"><div><div class="cluster"><b>'+esc(x.name)+'</b>'+(x.service_categories?.name?'<span class="category-label">'+esc(x.service_categories.name)+'</span>':"")+'</div><div class="muted tiny">'+x.duration_minutes+' мин</div></div><b>'+money(x.price)+'</b></div>';
+  if(tab==="staff"){const avatar=x.avatar_url?'<img class="staff-photo" src="'+esc(x.avatar_url)+'" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement(\'span\'),{className:\'avatar\',textContent:\''+initials(x.name)+'\'}))">':'<span class="avatar">'+initials(x.name)+'</span>';return '<div class="spread" style="padding:13px 0;border-bottom:1px solid var(--line)"><div class="person">'+avatar+'<div><b>'+esc(x.name)+'</b><small>'+(x.active?"Активен":"Неактивен")+'</small></div></div></div>'}
+  return '<div class="spread" style="padding:13px 0;border-bottom:1px solid var(--line)"><div><b>'+esc(x.name)+'</b><div class="muted tiny">'+esc(x.address||"Адрес не указан")+' · '+esc(x.timezone||"")+'</div></div></div>';
+}
+function bindAddEntity(tab,p,data){
+  document.querySelector("#addEntity")?.addEventListener("submit",async e=>{
+    e.preventDefault();const f=new FormData(e.currentTarget);let table,payload;
+    if(tab==="services"){table="services";payload={organization_id:p.organization_id,name:f.get("name"),duration_minutes:Number(f.get("duration")),price:f.get("price"),category_id:f.get("category")||null}}
+    else if(tab==="staff"){table="staff_members";payload={organization_id:p.organization_id,name:f.get("name"),location_id:f.get("location"),avatar_url:f.get("avatar_url")||null}}
+    else if(tab==="locations"){table="locations";payload={organization_id:p.organization_id,name:f.get("name"),timezone:f.get("timezone"),address:f.get("address")||null}}
+    else{table="customers";payload={organization_id:p.organization_id,name:f.get("name"),phone:f.get("phone"),email:f.get("email")||null,note:f.get("note")||null}}
+    const {error}=await sb.from(table).insert(payload);if(error)toast(error.message,"error");else{toast("Добавлено");catalog()}
+  })
+}
 
 function localDateParts(value,timeZone){
   const parts=new Intl.DateTimeFormat("en-CA",{timeZone,year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(new Date(value));
