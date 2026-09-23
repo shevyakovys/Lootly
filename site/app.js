@@ -304,28 +304,202 @@ async function schedule(){
 }
 
 async function widgets(){
-  if(!await requireAuth())return;const p=await profile();if(!["owner","admin"].includes(p.role))return shell("widgets","Виджеты",'<div class="notice error">Конструктор доступен владельцу и администратору.</div>');
-  const [w,l,s,st]=await Promise.all([sb.from("booking_widgets").select("*").order("created_at"),sb.from("locations").select("id,name").eq("active",true).order("name"),sb.from("services").select("id,name").eq("active",true).order("name"),sb.from("staff_members").select("id,name").eq("active",true).order("name")]);
-  let list=w.data||[];if(!list.length){const {data,error}=await sb.from("booking_widgets").insert({organization_id:p.organization_id,name:"Основной виджет",title:"Онлайн-запись",subtitle:"Выберите услугу и удобное время"}).select("*").single();if(error)return shell("widgets","Виджеты",'<div class="notice error">'+esc(error.message)+'</div>');list=[data]}
-  const content='<div class="page-head"><div><h1>Виджеты</h1><p>Создавайте отдельные формы под сайт, филиалы и рекламные кампании.</p></div><button class="btn brand" id="newWidget">+ Новый виджет</button></div><div class="widget-builder"><div class="stack"><div class="card"><label class="field"><span>Редактируемый виджет</span><select id="widgetSelect">'+list.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'</select></label></div><form id="widgetForm" class="card stack"></form><section id="widgetShare" class="card stack"></section></div><aside class="preview-device"><div class="preview-screen" id="widgetPreview"></div></aside></div>';
+  if(!await requireAuth())return;
+  const p=await profile();
+  if(!["owner","admin"].includes(p.role))return shell("widgets","Виджеты",'<div class="notice error">Конструктор доступен владельцу и администратору.</div>');
+
+  const [w,l,s,st]=await Promise.all([
+    sb.from("booking_widgets").select("*").order("created_at"),
+    sb.from("locations").select("id,name").eq("active",true).order("name"),
+    sb.from("services").select("id,name").eq("active",true).order("name"),
+    sb.from("staff_members").select("id,name").eq("active",true).order("name")
+  ]);
+  if(w.error||l.error||s.error||st.error){
+    const e=w.error||l.error||s.error||st.error;
+    return shell("widgets","Виджеты",'<div class="notice error">'+esc(friendlyError(e))+'</div>');
+  }
+
+  let list=w.data||[];
+  if(!list.length){
+    const {data,error}=await sb.from("booking_widgets").insert({
+      organization_id:p.organization_id,
+      name:"Основной виджет",
+      title:"Онлайн-запись",
+      subtitle:"Выберите услугу и удобное время"
+    }).select("*").single();
+    if(error)return shell("widgets","Виджеты",'<div class="notice error">'+esc(friendlyError(error))+'</div>');
+    list=[data];
+  }
+
+  const content='<div class="page-head"><div><h1>Виджеты</h1><p>Настройте сценарий записи, оформление и способ установки на сайт.</p></div><div class="cluster"><span id="widgetSaveState" class="save-state saved">Сохранено</span><button class="btn brand" id="newWidget">+ Новый виджет</button></div></div>'+
+    '<div class="widget-builder"><div class="stack"><div class="card"><label class="field"><span>Редактируемый виджет</span><select id="widgetSelect">'+list.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'</select></label></div><form id="widgetForm" class="card stack"></form><section id="widgetShare" class="card stack"></section></div>'+
+    '<aside class="preview-device" id="previewDevice"><div class="preview-toolbar"><div class="segmented"><button type="button" class="active" data-preview-mode="desktop">Desktop</button><button type="button" data-preview-mode="mobile">Mobile</button></div><div class="segmented"><button type="button" class="active" data-preview-step="start">Начало</button><button type="button" data-preview-step="time">Время</button><button type="button" data-preview-step="contact">Контакты</button></div></div><div class="preview-screen" id="widgetPreview"></div></aside></div>';
   await shell("widgets","Виджеты",content);
-  let selected=list[0],embedMode="floating";const loc=l.data||[],svc=s.data||[],staff=st.data||[];
-  const form=document.querySelector("#widgetForm"),preview=document.querySelector("#widgetPreview"),share=document.querySelector("#widgetShare"),select=document.querySelector("#widgetSelect");
-  const analytics=async()=>{const {data}=await sb.rpc("get_widget_analytics",{p_widget_id:selected.id});return data||{}};
-  const pills=(items,ids,scope)=>'<div class="scope-pills" data-scope="'+scope+'">'+items.map(x=>'<label class="scope-pill"><input type="checkbox" value="'+x.id+'" '+(ids.includes(x.id)?"checked":"")+'>'+esc(x.name)+'</label>').join("")+'</div>';
-  function collect(){const check=s=>[...form.querySelectorAll('[data-scope="'+s+'"] input:checked')].map(x=>x.value);return{organization_id:p.organization_id,name:form.elements.name.value.trim(),active:form.elements.active.value==="true",title:form.elements.title.value.trim()||"Онлайн-запись",subtitle:form.elements.subtitle.value.trim()||null,primary_color:form.elements.primary_color.value,button_text:form.elements.button_text.value.trim()||"Записаться",button_position:form.elements.button_position.value,panel_side:form.elements.panel_side.value,open_mode:form.elements.open_mode.value,button_animation:form.elements.button_animation.checked,show_staff_step:form.elements.show_staff_step.checked,allow_any_staff:form.elements.allow_any_staff.checked,show_branding:form.elements.show_branding.checked,waitlist_enabled:form.elements.waitlist_enabled.checked,location_ids:check("locations"),service_ids:check("services"),staff_ids:check("staff"),step_order:form.elements.step_preset.value==="service-first"?["service","location","staff","datetime"]:["location","service","staff","datetime"],updated_at:new Date().toISOString()}}
+
+  let selected=list[0],embedMode="floating",previewMode="desktop",previewStep="start",dirty=false;
+  const loc=l.data||[],svc=s.data||[],staff=st.data||[];
+  const form=document.querySelector("#widgetForm"),preview=document.querySelector("#widgetPreview"),share=document.querySelector("#widgetShare"),select=document.querySelector("#widgetSelect"),device=document.querySelector("#previewDevice"),saveState=document.querySelector("#widgetSaveState");
+
+  const analytics=async()=>{
+    try{
+      const {data,error}=await sb.rpc("get_widget_analytics",{p_widget_id:selected.id});
+      if(error)throw error;
+      return data||{};
+    }catch{return{}}
+  };
+  const pills=(items,ids,scope)=>'<div class="scope-pills" data-scope="'+scope+'">'+(items.length?items.map(x=>'<label class="scope-pill"><input type="checkbox" value="'+x.id+'" '+(ids.includes(x.id)?"checked":"")+'>'+esc(x.name)+'</label>').join(""):'<span class="muted tiny">Нет активных элементов</span>')+'</div>';
+  const setDirty=value=>{
+    dirty=value;
+    saveState.textContent=value?"Есть несохранённые изменения":"Сохранено";
+    saveState.className="save-state "+(value?"dirty":"saved");
+  };
+  const defaultConfig=()=>({
+    title:"Онлайн-запись",
+    subtitle:"Выберите услугу и удобное время",
+    primary_color:"#5b5cf0",
+    button_text:"Записаться",
+    button_position:"bottom-right",
+    panel_side:"right",
+    open_mode:"drawer",
+    button_animation:false,
+    show_staff_step:true,
+    allow_any_staff:true,
+    show_branding:true,
+    waitlist_enabled:true,
+    step_preset:"location-first"
+  });
+  function collect(){
+    const check=s=>[...form.querySelectorAll('[data-scope="'+s+'"] input:checked')].map(x=>x.value);
+    return{
+      organization_id:p.organization_id,
+      name:form.elements.name.value.trim(),
+      active:form.elements.active.value==="true",
+      title:form.elements.title.value.trim()||"Онлайн-запись",
+      subtitle:form.elements.subtitle.value.trim()||null,
+      primary_color:form.elements.primary_color.value,
+      button_text:form.elements.button_text.value.trim()||"Записаться",
+      button_position:form.elements.button_position.value,
+      panel_side:form.elements.panel_side.value,
+      open_mode:form.elements.open_mode.value,
+      button_animation:form.elements.button_animation.checked,
+      show_staff_step:form.elements.show_staff_step.checked,
+      allow_any_staff:form.elements.allow_any_staff.checked,
+      show_branding:form.elements.show_branding.checked,
+      waitlist_enabled:form.elements.waitlist_enabled.checked,
+      location_ids:check("locations"),
+      service_ids:check("services"),
+      staff_ids:check("staff"),
+      step_order:form.elements.step_preset.value==="service-first"?["service","location","staff","datetime"]:["location","service","staff","datetime"],
+      updated_at:new Date().toISOString()
+    };
+  }
+  function updatePreview(){
+    if(!form.elements.name)return;
+    const cfg=collect();
+    preview.style.setProperty("--accent",cfg.primary_color);
+    device.classList.toggle("mobile",previewMode==="mobile");
+    let sample="";
+    if(previewStep==="start"){
+      sample='<span class="tiny muted">ШАГ 1</span><h3 style="margin:6px 0 14px">'+(cfg.step_order[0]==="service"?"Выберите услугу":"Выберите филиал")+'</h3><div class="stack"><button class="option active" type="button"><b>Основной вариант</b><small>Пример выбранного элемента</small></button><button class="option" type="button"><b>Другой вариант</b><small>Пример элемента</small></button></div><button class="btn brand" type="button" style="width:100%;margin-top:18px;background:'+cfg.primary_color+'">Продолжить</button>';
+    }else if(previewStep==="time"){
+      sample='<span class="tiny muted">ВЫБОР ВРЕМЕНИ</span><h3 style="margin:6px 0 14px">Выберите время</h3><div class="date-strip preview-dates"><button class="date-chip active" type="button"><span>ср</span><b>23</b></button><button class="date-chip" type="button"><span>чт</span><b>24</b></button><button class="date-chip" type="button"><span>пт</span><b>25</b></button></div><div class="slot-group"><div class="slot-group-title">Днём</div><div class="slot-grid"><button class="slot active" type="button">13:00</button><button class="slot" type="button">14:30</button><button class="slot" type="button">16:00</button></div></div>';
+    }else{
+      sample='<span class="tiny muted">КОНТАКТЫ</span><h3 style="margin:6px 0 14px">Контактные данные</h3><div class="summary"><b>Стрижка</b><div class="muted tiny">Основной филиал · 24 сентября, 14:30</div></div><div class="stack" style="margin-top:12px"><input placeholder="Ваше имя"><input placeholder="+7 999 000-00-00"><input placeholder="Email — необязательно"></div><button class="btn brand" type="button" style="width:100%;margin-top:18px;background:'+cfg.primary_color+'">Продолжить</button>';
+    }
+    preview.innerHTML='<div style="padding:14px"><div class="spread"><span class="avatar" style="background:'+cfg.primary_color+';color:white">L</span><span class="status '+(cfg.active?"confirmed":"canceled")+'">'+(cfg.active?"Активен":"Выключен")+'</span></div><h2 style="margin:22px 0 6px">'+esc(cfg.title)+'</h2><p class="muted">'+esc(cfg.subtitle||"Выберите услугу и удобное время")+'</p><div class="stepbar"><span style="width:'+(previewStep==="start"?"25":previewStep==="time"?"65":"88")+'%"></span></div><div style="padding-top:20px">'+sample+'</div>'+(cfg.show_branding?'<div class="tiny muted" style="text-align:center;margin-top:30px">Powered by Lootly</div>':"")+'</div>';
+  }
   async function render(){
-    const a=await analytics(),x=selected;form.innerHTML='<div class="card-title"><div><h2>Настройки</h2><p class="muted tiny">Изменения применяются после сохранения</p></div><span class="status '+(x.active?"confirmed":"canceled")+'">'+(x.active?"Активен":"Выключен")+'</span></div><div class="grid grid-2"><label class="field"><span>Название в кабинете</span><input name="name" value="'+esc(x.name)+'"></label><label class="field"><span>Статус</span><select name="active"><option value="true">Активен</option><option value="false">Выключен</option></select></label></div><label class="field"><span>Заголовок формы</span><input name="title" value="'+esc(x.title||"Онлайн-запись")+'"></label><label class="field"><span>Подзаголовок</span><input name="subtitle" value="'+esc(x.subtitle||"")+'"></label><div class="grid grid-3"><label class="field"><span>Цвет</span><input name="primary_color" type="color" value="'+esc(x.primary_color||"#111827")+'"></label><label class="field"><span>Кнопка</span><input name="button_text" value="'+esc(x.button_text||"Записаться")+'"></label><label class="field"><span>Первые шаги</span><select name="step_preset"><option value="location-first">Сначала филиал</option><option value="service-first">Сначала услуга</option></select></label></div><div class="grid grid-3"><label class="field"><span>Положение кнопки</span><select name="button_position"><option value="bottom-right">Справа снизу</option><option value="bottom-left">Слева снизу</option><option value="top-right">Справа сверху</option><option value="top-left">Слева сверху</option></select></label><label class="field"><span>Открытие</span><select name="open_mode"><option value="drawer">Боковая панель</option><option value="modal">Модальное окно</option></select></label><label class="field"><span>Сторона панели</span><select name="panel_side"><option value="right">Справа</option><option value="left">Слева</option></select></label></div><div class="grid grid-2"><label class="scope-pill"><input name="button_animation" type="checkbox" '+(x.button_animation?"checked":"")+'>Анимация кнопки</label><label class="scope-pill"><input name="show_staff_step" type="checkbox" '+(x.show_staff_step?"checked":"")+'>Показывать специалиста</label><label class="scope-pill"><input name="allow_any_staff" type="checkbox" '+(x.allow_any_staff?"checked":"")+'>Разрешить «любой специалист»</label><label class="scope-pill"><input name="show_branding" type="checkbox" '+(x.show_branding?"checked":"")+'>Powered by Lootly</label><label class="scope-pill"><input name="waitlist_enabled" type="checkbox" '+(x.waitlist_enabled!==false?"checked":"")+'>Лист ожидания при отсутствии слотов</label></div><div><b>Филиалы</b><p class="muted tiny">Ничего не выбрано = все активные.</p>'+pills(loc,x.location_ids||[],"locations")+'</div><div><b>Услуги</b><p class="muted tiny">Ничего не выбрано = все активные.</p>'+pills(svc,x.service_ids||[],"services")+'</div><div><b>Сотрудники</b><p class="muted tiny">Ничего не выбрано = все подходящие.</p>'+pills(staff,x.staff_ids||[],"staff")+'</div><div class="cluster"><button class="btn brand">Сохранить</button><button type="button" class="btn danger" id="deleteWidget">Удалить</button></div>';
-    form.elements.active.value=String(x.active);form.elements.button_position.value=x.button_position||"bottom-right";form.elements.open_mode.value=x.open_mode||"drawer";form.elements.panel_side.value=x.panel_side||"right";form.elements.step_preset.value=(x.step_order||[])[0]==="service"?"service-first":"location-first";
-    const cfg=collect();preview.style.setProperty("--accent",cfg.primary_color);preview.innerHTML='<div style="padding:14px"><div class="spread"><span class="avatar" style="background:'+cfg.primary_color+';color:white">L</span><span class="status confirmed">Preview</span></div><h2 style="margin:22px 0 6px">'+esc(cfg.title)+'</h2><p class="muted">'+esc(cfg.subtitle||"Выберите услугу и удобное время")+'</p><div class="stepbar"><span style="width:32%"></span></div><div style="padding-top:20px"><span class="tiny muted">ШАГ 1</span><h3 style="margin:6px 0 14px">'+(cfg.step_order[0]==="service"?"Выберите услугу":"Выберите филиал")+'</h3><div class="stack"><button class="option active"><b>Основной вариант</b><small>Пример элемента</small></button><button class="option"><b>Другой вариант</b><small>Пример элемента</small></button></div><button class="btn brand" style="width:100%;margin-top:18px;background:'+cfg.primary_color+'">Продолжить</button></div>'+(cfg.show_branding?'<div class="tiny muted" style="text-align:center;margin-top:38px">Powered by Lootly</div>':"")+'</div>';
+    const a=await analytics(),x=selected;
+    form.innerHTML='<div class="card-title"><div><h2>Настройки</h2><p class="muted tiny">Preview справа обновляется сразу, публикация — после сохранения</p></div><span class="status '+(x.active?"confirmed":"canceled")+'">'+(x.active?"Активен":"Выключен")+'</span></div>'+
+      '<section class="builder-section"><div class="builder-section-head"><span>01</span><div><b>Основное</b><small>Название, статус и тексты формы</small></div></div><div class="grid grid-2"><label class="field"><span>Название в кабинете</span><input name="name" value="'+esc(x.name)+'" required></label><label class="field"><span>Статус</span><select name="active"><option value="true">Активен</option><option value="false">Выключен</option></select></label></div><label class="field"><span>Заголовок формы</span><input name="title" value="'+esc(x.title||"Онлайн-запись")+'"></label><label class="field"><span>Подзаголовок</span><input name="subtitle" value="'+esc(x.subtitle||"")+'"></label></section>'+
+      '<section class="builder-section"><div class="builder-section-head"><span>02</span><div><b>Оформление и запуск</b><small>Цвет, кнопка и способ открытия</small></div></div><div class="grid grid-3"><label class="field"><span>Цвет</span><input name="primary_color" type="color" value="'+esc(x.primary_color||"#111827")+'"></label><label class="field"><span>Текст кнопки</span><input name="button_text" value="'+esc(x.button_text||"Записаться")+'"></label><label class="field"><span>Первые шаги</span><select name="step_preset"><option value="location-first">Сначала филиал</option><option value="service-first">Сначала услуга</option></select></label></div><div class="grid grid-3"><label class="field"><span>Положение кнопки</span><select name="button_position"><option value="bottom-right">Справа снизу</option><option value="bottom-left">Слева снизу</option><option value="top-right">Справа сверху</option><option value="top-left">Слева сверху</option></select></label><label class="field"><span>Открытие</span><select name="open_mode"><option value="drawer">Боковая панель</option><option value="modal">Модальное окно</option></select></label><label class="field"><span>Сторона панели</span><select name="panel_side"><option value="right">Справа</option><option value="left">Слева</option></select></label></div></section>'+
+      '<section class="builder-section"><div class="builder-section-head"><span>03</span><div><b>Сценарий записи</b><small>Что увидит клиент внутри виджета</small></div></div><div class="toggle-grid"><label class="toggle-card"><input name="button_animation" type="checkbox" '+(x.button_animation?"checked":"")+'><span><b>Анимация кнопки</b><small>Ненавязчиво привлекает внимание</small></span></label><label class="toggle-card"><input name="show_staff_step" type="checkbox" '+(x.show_staff_step?"checked":"")+'><span><b>Выбор специалиста</b><small>Показывать отдельный шаг</small></span></label><label class="toggle-card"><input name="allow_any_staff" type="checkbox" '+(x.allow_any_staff?"checked":"")+'><span><b>«Любой специалист»</b><small>Разрешить подобрать ближайшее время</small></span></label><label class="toggle-card"><input name="show_branding" type="checkbox" '+(x.show_branding?"checked":"")+'><span><b>Powered by Lootly</b><small>Показывать подпись сервиса</small></span></label><label class="toggle-card"><input name="waitlist_enabled" type="checkbox" '+(x.waitlist_enabled!==false?"checked":"")+'><span><b>Лист ожидания</b><small>Предлагать, если свободных окон нет</small></span></label></div></section>'+
+      '<section class="builder-section"><div class="builder-section-head"><span>04</span><div><b>Доступность</b><small>Ограничьте содержимое конкретным виджетом</small></div></div><div><b>Филиалы</b><p class="muted tiny">Ничего не выбрано = все активные.</p>'+pills(loc,x.location_ids||[],"locations")+'</div><div><b>Услуги</b><p class="muted tiny">Ничего не выбрано = все активные.</p>'+pills(svc,x.service_ids||[],"services")+'</div><div><b>Сотрудники</b><p class="muted tiny">Ничего не выбрано = все подходящие.</p>'+pills(staff,x.staff_ids||[],"staff")+'</div></section>'+
+      '<div class="builder-footer"><div class="cluster"><button class="btn brand">Сохранить изменения</button><button type="button" class="btn secondary" id="discardWidget">Вернуть сохранённые</button><button type="button" class="btn ghost" id="resetWidget">Сбросить оформление</button></div><button type="button" class="btn danger" id="deleteWidget">Удалить</button></div>';
+    form.elements.active.value=String(x.active);
+    form.elements.button_position.value=x.button_position||"bottom-right";
+    form.elements.open_mode.value=x.open_mode||"drawer";
+    form.elements.panel_side.value=x.panel_side||"right";
+    form.elements.step_preset.value=(x.step_order||[])[0]==="service"?"service-first":"location-first";
+    setDirty(false);
+    updatePreview();
     await renderShare(a);
   }
-  async function renderShare(a){const base="https://shevyakovys.github.io/Lootly",link=base+"/#/widget/"+selected.public_key;const snippets={floating:'<script src="'+base+'/embed.js" data-lootly-widget="'+selected.public_key+'" async><'+'/script>',inline:'<iframe src="'+link+'" style="width:100%;min-height:720px;border:0;border-radius:16px" loading="lazy"></iframe>',link};share.innerHTML='<div class="card-title"><div><h2>Публикация</h2><p class="muted tiny">Выберите способ установки</p></div></div><div class="funnel"><div class="funnel-item"><b>'+Number(a.views||0)+'</b><span>просмотров</span></div><div class="funnel-item"><b>'+Number(a.opens||0)+'</b><span>открытий</span></div><div class="funnel-item"><b>'+Number(a.bookings||0)+'</b><span>записей</span></div></div><div class="embed-mode"><button type="button" class="embed-choice '+(embedMode==="floating"?"active":"")+'" data-embed="floating">Плавающая кнопка</button><button type="button" class="embed-choice '+(embedMode==="inline"?"active":"")+'" data-embed="inline">Inline</button><button type="button" class="embed-choice '+(embedMode==="link"?"active":"")+'" data-embed="link">Прямая ссылка</button></div><textarea id="embedCode" class="codebox" readonly>'+esc(snippets[embedMode])+'</textarea><div class="cluster"><button class="btn secondary" id="copyEmbed" type="button">Копировать</button><a class="btn secondary" target="_blank" href="'+link+'">Открыть форму ↗</a></div><div class="notice info">Конверсия открытия → запись: <b>'+Math.round(Number(a.booking_conversion||0)*100)+'%</b></div>';
-    document.querySelectorAll("[data-embed]").forEach(b=>b.addEventListener("click",()=>{embedMode=b.dataset.embed;renderShare(a)}));document.querySelector("#copyEmbed")?.addEventListener("click",async()=>{await navigator.clipboard.writeText(document.querySelector("#embedCode").value);toast("Код скопирован")})
+  async function renderShare(a){
+    const base="https://shevyakovys.github.io/Lootly",link=base+"/#/widget/"+selected.public_key;
+    const snippets={
+      floating:'<script src="'+base+'/embed.js" data-lootly-widget="'+selected.public_key+'" async><'+'/script>',
+      inline:'<iframe src="'+link+'" style="width:100%;min-height:720px;border:0;border-radius:16px" loading="lazy"></iframe>',
+      link
+    };
+    share.innerHTML='<div class="card-title"><div><h2>Публикация</h2><p class="muted tiny">Выберите способ установки</p></div></div><div class="funnel"><div class="funnel-item"><b>'+Number(a.views||0)+'</b><span>просмотров</span></div><div class="funnel-item"><b>'+Number(a.opens||0)+'</b><span>открытий</span></div><div class="funnel-item"><b>'+Number(a.bookings||0)+'</b><span>записей</span></div></div><div class="embed-mode"><button type="button" class="embed-choice '+(embedMode==="floating"?"active":"")+'" data-embed="floating">Плавающая кнопка</button><button type="button" class="embed-choice '+(embedMode==="inline"?"active":"")+'" data-embed="inline">Inline</button><button type="button" class="embed-choice '+(embedMode==="link"?"active":"")+'" data-embed="link">Прямая ссылка</button></div><textarea id="embedCode" class="codebox" readonly>'+esc(snippets[embedMode])+'</textarea><div class="cluster"><button class="btn secondary" id="copyEmbed" type="button">Копировать</button><a class="btn secondary" target="_blank" rel="noopener" href="'+link+'">Открыть форму ↗</a></div><div class="notice info">Конверсия открытия → запись: <b>'+Math.round(Number(a.booking_conversion||0)*100)+'%</b></div>';
+    document.querySelectorAll("[data-embed]").forEach(b=>b.addEventListener("click",()=>{embedMode=b.dataset.embed;renderShare(a)}));
+    document.querySelector("#copyEmbed")?.addEventListener("click",async()=>{
+      const value=document.querySelector("#embedCode").value;
+      try{
+        if(navigator.clipboard?.writeText)await navigator.clipboard.writeText(value);
+        else{
+          const area=document.querySelector("#embedCode");area.focus();area.select();
+          if(!document.execCommand("copy"))throw new Error("copy failed");
+        }
+        toast("Код скопирован");
+      }catch{toast("Не удалось скопировать автоматически. Выделите код вручную.","error")}
+    });
   }
-  select.addEventListener("change",()=>{selected=list.find(x=>x.id===select.value)||list[0];render()});form.addEventListener("input",()=>{const cfg=collect();preview.style.setProperty("--accent",cfg.primary_color);const h=preview.querySelector("h2"),p=preview.querySelector("p.muted"),btn=preview.querySelector(".btn.brand");if(h)h.textContent=cfg.title;if(p)p.textContent=cfg.subtitle||"Выберите услугу и удобное время";if(btn){btn.style.background=cfg.primary_color}});form.addEventListener("submit",async e=>{e.preventDefault();const {data,error}=await sb.from("booking_widgets").update(collect()).eq("id",selected.id).select("*").single();if(error)toast(error.message,"error");else{selected=data;list=list.map(x=>x.id===data.id?data:x);toast("Настройки сохранены");render()}});
-  form.addEventListener("click",async e=>{if(e.target.id!=="deleteWidget")return;if(list.length===1)return toast("Нужен хотя бы один виджет","error");if(!confirm("Удалить этот виджет?"))return;const {error}=await sb.from("booking_widgets").delete().eq("id",selected.id);if(error)return toast(error.message,"error");list=list.filter(x=>x.id!==selected.id);selected=list[0];select.innerHTML=list.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("");toast("Виджет удалён");render()});
-  document.querySelector("#newWidget").addEventListener("click",async()=>{const {data,error}=await sb.from("booking_widgets").insert({organization_id:p.organization_id,name:"Новый виджет",title:"Онлайн-запись",subtitle:"Выберите услугу и удобное время"}).select("*").single();if(error)return toast(error.message,"error");list.push(data);selected=data;select.insertAdjacentHTML("beforeend",'<option value="'+data.id+'">'+esc(data.name)+'</option>');select.value=data.id;toast("Новый виджет создан");render()});render();
+
+  select.addEventListener("change",()=>{
+    if(dirty&&!confirm("Есть несохранённые изменения. Переключиться без сохранения?")){select.value=selected.id;return}
+    selected=list.find(x=>x.id===select.value)||list[0];render();
+  });
+  form.addEventListener("input",()=>{setDirty(true);updatePreview()});
+  form.addEventListener("change",()=>{setDirty(true);updatePreview()});
+  form.addEventListener("submit",async e=>{
+    e.preventDefault();
+    const submit=form.querySelector('button[type="submit"]');
+    submit.disabled=true;submit.textContent="Сохраняем…";
+    const {data,error}=await sb.from("booking_widgets").update(collect()).eq("id",selected.id).select("*").single();
+    submit.disabled=false;submit.textContent="Сохранить изменения";
+    if(error)return toast(friendlyError(error),"error");
+    selected=data;list=list.map(x=>x.id===data.id?data:x);
+    const option=select.querySelector('option[value="'+data.id+'"]');if(option)option.textContent=data.name;
+    toast("Настройки сохранены");render();
+  });
+  form.addEventListener("click",async e=>{
+    if(e.target.id==="discardWidget"){if(dirty&&confirm("Вернуть последние сохранённые настройки?"))render();return}
+    if(e.target.id==="resetWidget"){
+      if(!confirm("Сбросить оформление и сценарий к базовым значениям? Изменения не сохранятся автоматически."))return;
+      const d=defaultConfig();
+      Object.entries(d).forEach(([key,value])=>{
+        const el=form.elements[key];if(!el)return;
+        if(el.type==="checkbox")el.checked=Boolean(value);else el.value=String(value);
+      });
+      setDirty(true);updatePreview();toast("Базовые настройки применены. Нажмите «Сохранить изменения».");return;
+    }
+    if(e.target.id!=="deleteWidget")return;
+    if(list.length===1)return toast("Нужен хотя бы один виджет","error");
+    if(!confirm("Удалить этот виджет? Код вставки перестанет работать."))return;
+    const {error}=await sb.from("booking_widgets").delete().eq("id",selected.id);
+    if(error)return toast(friendlyError(error),"error");
+    list=list.filter(x=>x.id!==selected.id);selected=list[0];
+    select.innerHTML=list.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("");
+    select.value=selected.id;toast("Виджет удалён");render();
+  });
+  document.querySelector("#newWidget").addEventListener("click",async()=>{
+    if(dirty&&!confirm("Есть несохранённые изменения. Создать новый виджет без их сохранения?"))return;
+    const {data,error}=await sb.from("booking_widgets").insert({organization_id:p.organization_id,name:"Новый виджет",title:"Онлайн-запись",subtitle:"Выберите услугу и удобное время"}).select("*").single();
+    if(error)return toast(friendlyError(error),"error");
+    list.push(data);selected=data;select.insertAdjacentHTML("beforeend",'<option value="'+data.id+'">'+esc(data.name)+'</option>');select.value=data.id;toast("Новый виджет создан");render();
+  });
+  document.querySelectorAll("[data-preview-mode]").forEach(b=>b.addEventListener("click",()=>{
+    previewMode=b.dataset.previewMode;
+    document.querySelectorAll("[data-preview-mode]").forEach(x=>x.classList.toggle("active",x===b));updatePreview();
+  }));
+  document.querySelectorAll("[data-preview-step]").forEach(b=>b.addEventListener("click",()=>{
+    previewStep=b.dataset.previewStep;
+    document.querySelectorAll("[data-preview-step]").forEach(x=>x.classList.toggle("active",x===b));updatePreview();
+  }));
+  addEventListener("beforeunload",e=>{if(dirty){e.preventDefault();e.returnValue=""}});
+  render();
 }
 
 async function settings(){
