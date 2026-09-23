@@ -169,3 +169,28 @@ flowchart LR
 The visual shell is responsive, but authorization and booking invariants remain server-side.
 Widget funnel events are written separately from appointment data so analytics failures cannot affect
 booking creation.
+
+
+## Calendar and waitlist architecture
+
+```mermaid
+flowchart LR
+    Admin[Admin calendar] --> LocalMove[reschedule_appointment_local]
+    LocalMove --> TZ[Location IANA timezone]
+    TZ --> Reschedule[reschedule_appointment]
+    Reschedule --> DB[(Appointments)]
+
+    Widget[Public widget] --> Slots[Widget availability]
+    Slots -->|no slots| Wait[create_public_widget_waitlist]
+    Wait --> W[(waitlist_entries)]
+    Dashboard[Admin dashboard] --> W
+```
+
+The local calendar RPC exists specifically to avoid converting drag-and-drop times in the
+administrator browser timezone.
+
+## Embed boundary
+
+The external launcher uses a Shadow DOM boundary so customer-site CSS does not alter Lootly controls.
+The booking form itself remains an iframe on the GitHub Pages origin and talks to Supabase directly
+with the publishable key and narrow public RPCs.
