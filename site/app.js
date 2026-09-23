@@ -217,7 +217,7 @@ async function renderQuickBooking(){
 
 async function catalog(){
   if(!await requireAuth())return;
-  const p=await profile(),o=await org(),manager=["owner","admin"].includes(p.role);
+  const p=await profile(),manager=["owner","admin"].includes(p.role);
   const [l,s,st,cust,cat,ss]=await Promise.all([
     sb.from("locations").select("*").order("name"),
     sb.from("services").select("*,service_categories(name)").order("name"),
@@ -374,7 +374,7 @@ function bindAddEntity(tab,p,data){
 }
 async function calendar(){
   if(!await requireAuth())return;
-  const p=await profile(),manager=["owner","admin"].includes(p.role);
+  const p=await profile(),o=await org(),manager=["owner","admin"].includes(p.role);
   const [apptRes,staffRes,locRes,hoursRes]=await Promise.all([
     sb.from("appointments").select("*,customers(name,phone),services(name),staff_members(name),locations(name,timezone)").order("start_at",{ascending:true}).limit(500),
     sb.from("staff_members").select("id,name").eq("active",true).order("name"),
