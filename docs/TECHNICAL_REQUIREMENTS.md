@@ -153,3 +153,20 @@ Active zero-cost production exposes an embeddable widget through GitHub Pages an
 - `site/embed.js` creates the floating launcher and drawer/modal iframe.
 - The iframe runtime is `#/widget/{public_key}`.
 - The Supabase publishable key may be present in browser code; service-role secrets must never be exposed.
+
+
+## Frontend structure and UX runtime
+
+The zero-cost hosted frontend is intentionally dependency-light:
+
+- `site/index.html` — static application shell;
+- `site/styles.css` — shared responsive design system;
+- `site/app.js` — authenticated admin and public booking SPA;
+- `site/embed.js` — external website widget launcher.
+
+The UI must preserve all existing domain workflows when redesigned. Service assignment, team invites,
+working-hours management, tenant scoping and booking constraints remain functional requirements, not
+optional presentation details.
+
+Widget analytics are stored in `booking_widget_events`. Public tracking is idempotent per
+widget/session/event and exposed through rate-limited RPC.

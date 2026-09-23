@@ -155,3 +155,33 @@ V4:
 
 Публичный runtime виджета обязан применять ограничения виджета на серверной стороне, а не только
 скрывать варианты в интерфейсе.
+
+
+## 11. UI/UX quality requirements
+
+Lootly should feel like a professional SaaS product rather than a collection of CRUD forms.
+
+Admin experience:
+- persistent desktop navigation and compact mobile navigation;
+- today's operational overview;
+- onboarding checklist for incomplete setup;
+- quick actions for frequent workflows;
+- searchable/filterable appointment journal;
+- human-readable customer/service/staff context in appointments;
+- consistent empty, loading, success and error states;
+- responsive behavior for phone, tablet and desktop.
+
+Customer booking experience:
+- guided multi-step flow;
+- visible progress;
+- touch-friendly service/location/staff choices;
+- seven-day date strip and slot grid;
+- clear booking summary before confirmation;
+- mobile-first layout;
+- success screen after booking.
+
+Widget distribution:
+- floating launcher embed;
+- inline iframe embed;
+- direct booking link;
+- conversion analytics for view/open/booking events.

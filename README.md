@@ -78,3 +78,21 @@ Expected public URL after the Pages workflow succeeds:
 
 Код можно вставить перед `</body>` на внешнем сайте. Он создаёт брендированную кнопку онлайн-записи
 и открывает форму в drawer или modal.
+
+
+## Premium UI/UX
+
+The active GitHub Pages frontend uses a responsive SaaS shell with:
+
+- desktop sidebar and mobile bottom navigation;
+- dashboard focused on today's operations;
+- onboarding checklist and quick actions;
+- enriched appointment journal with search and status filters;
+- redesigned catalog and schedule management;
+- premium widget builder with live preview;
+- direct link, inline iframe and floating-button embed modes;
+- widget funnel analytics: views → opens → bookings;
+- guided multi-step mobile-first booking flow;
+- toasts, empty states and clearer validation/error states.
+
+Frontend source is split into `site/index.html`, `site/styles.css`, `site/app.js` and `site/embed.js`.
