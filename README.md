@@ -60,3 +60,21 @@ The public frontend is deployed from `site/index.html` using GitHub Pages. Supab
 Expected public URL after the Pages workflow succeeds:
 
 `https://shevyakovys.github.io/Lootly/`
+
+
+## Конструктор виджетов
+
+После входа откройте раздел **Виджеты**:
+
+`https://shevyakovys.github.io/Lootly/#/widgets`
+
+Для каждого виджета Lootly генерирует код вида:
+
+```html
+<script src="https://shevyakovys.github.io/Lootly/embed.js"
+        data-lootly-widget="<public-widget-key>"
+        async></script>
+```
+
+Код можно вставить перед `</body>` на внешнем сайте. Он создаёт брендированную кнопку онлайн-записи
+и открывает форму в drawer или modal.
