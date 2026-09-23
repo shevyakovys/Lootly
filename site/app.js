@@ -148,7 +148,7 @@ async function renderQuickBooking(){
     root.innerHTML='<div class="card"><h2>Новая запись</h2><p class="muted">Сначала добавьте филиал, услугу и клиента в справочниках.</p><a class="btn secondary" href="#/catalog">Открыть справочники</a></div>';return
   }
 
-  root.innerHTML='<form id="quickBook" class="card stack"><div class="card-title"><div><h2>Новая запись</h2><p class="muted tiny">Можно выбрать свободный слот или поставить запись вручную на точное время.</p></div><span class="status confirmed" id="quickDuration">—</span></div><div class="grid grid-4"><label class="field"><span>Филиал</span><select name="location">'+loc.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'</select></label><label class="field"><span>Услуга</span><select name="service">'+svc.map(x=>'<option value="'+x.id+'">'+esc(x.name)+' · '+durationLabel(x.duration_minutes)+'</option>').join("")+'</select></label><label class="field"><span>Сотрудник</span><select name="staff"><option value="">Загрузка…</option></select></label><label class="field"><span>Клиент</span><select name="customer">'+cust.map(x=>'<option value="'+x.id+'">'+esc(x.name)+' · '+esc(x.phone)+'</option>').join("")+'</select></label></div><div class="quick-book-mode"><button type="button" class="active" data-quick-mode="slots">Свободные слоты</button><button type="button" data-quick-mode="manual">Точное время</button></div><div class="grid grid-2"><label class="field"><span>Дата</span><input type="date" name="day"></label><label class="field" id="quickSlotField"><span>Свободное время</span><select name="slot"><option value="">Загрузка…</option></select></label><label class="field hidden" id="quickManualField"><span>Время начала</span><input type="time" name="manual_time" step="60"><small>Длительность услуги будет учтена автоматически.</small></label></div><div id="quickBookInfo" class="muted tiny"></div><div><button class="btn brand" id="quickBookSubmit">Создать запись</button></div></form>';
+  root.innerHTML='<form id="quickBook" class="card stack"><div class="card-title"><div><h2>Новая запись</h2><p class="muted tiny">Можно выбрать свободный слот или поставить запись вручную на точное время.</p></div><span class="status confirmed" id="quickDuration">—</span></div><div class="grid grid-4"><label class="field"><span>Филиал</span><select name="location">'+loc.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'</select></label><label class="field"><span>Услуга</span><select name="service">'+svc.map(x=>'<option value="'+x.id+'">'+esc(x.name)+' · '+durationLabel(x.duration_minutes)+'</option>').join("")+'</select></label><label class="field"><span>Сотрудник</span><select name="staff"><option value="">Загрузка…</option></select></label><label class="field"><span>Клиент</span><select name="customer">'+cust.map(x=>'<option value="'+x.id+'">'+esc(x.name)+' · '+esc(x.phone)+'</option>').join("")+'</select></label></div><div class="quick-book-mode"><button type="button" class="active" data-quick-mode="slots">Свободные слоты</button><button type="button" data-quick-mode="manual">Точное время</button></div><div class="grid grid-2"><label class="field"><span>Дата</span><input type="date" name="day"></label><label class="field" id="quickSlotField"><span>Свободное время</span><select name="slot"><option value="">Загрузка…</option></select></label><label class="field hidden" id="quickManualField"><span>Время начала</span><input type="time" name="manual_time" step="60"><small id="manualTimeHint">Длительность услуги будет учтена автоматически.</small></label></div><div id="quickBookInfo" class="muted tiny"></div><div><button class="btn brand" id="quickBookSubmit">Создать запись</button></div></form>';
 
   const f=document.querySelector("#quickBook"),o=await org();
   let eligibleStaff=[],quickMode="slots";
@@ -159,6 +159,15 @@ async function renderQuickBooking(){
   };
   const currentLocation=()=>loc.find(x=>x.id===f.elements.location.value)||loc[0];
   const formatSlot=(value,tz)=>new Intl.DateTimeFormat("ru-RU",{timeZone:tz,hour:"2-digit",minute:"2-digit"}).format(new Date(value));
+  const updateManualHint=()=>{
+    const hint=document.querySelector("#manualTimeHint"),time=f.elements.manual_time?.value,staffId=f.elements.staff?.value;
+    if(!hint)return;
+    const staffRow=eligibleStaff.find(x=>x.id===staffId),service=svc.find(x=>x.id===f.elements.service.value);
+    const duration=Math.max(1,Number(staffRow?.duration_minutes||service?.duration_minutes||0));
+    if(!time){hint.textContent="Длительность: "+durationLabel(duration)+". Укажите время начала.";return}
+    const [h,m]=time.split(":").map(Number),total=h*60+m+duration,endH=Math.floor(total/60)%24,endM=total%60,dayShift=Math.floor(total/1440);
+    hint.textContent="Окончание: "+String(endH).padStart(2,"0")+":"+String(endM).padStart(2,"0")+" · "+durationLabel(duration)+(dayShift?" · следующий день":"");
+  };
   const setDayForLocation=()=>{
     const location=currentLocation(),today=dateInZone(location.timezone);
     f.elements.day.min=today;
@@ -206,6 +215,7 @@ async function renderQuickBooking(){
     if(manual){
       f.elements.slot.disabled=true;
       submit.disabled=!f.elements.staff.value||!f.elements.manual_time.value;
+      updateManualHint();
       document.querySelector("#quickBookInfo").textContent="Ручное время проверяется по рабочим часам, исключениям и пересечениям при создании записи.";
     }else{
       f.elements.slot.disabled=false;
@@ -218,7 +228,7 @@ async function renderQuickBooking(){
   f.elements.service.addEventListener("change",()=>loadStaff());
   f.elements.staff.addEventListener("change",()=>{if(quickMode==="slots")loadSlots();else syncQuickMode()});
   f.elements.day.addEventListener("change",()=>{if(quickMode==="slots")loadSlots()});
-  f.elements.manual_time.addEventListener("input",syncQuickMode);
+  f.elements.manual_time.addEventListener("input",()=>{updateManualHint();syncQuickMode()});
   await loadStaff({resetDay:true});
   syncQuickMode();
 
@@ -954,6 +964,7 @@ async function bookingExperience({widgetKey=null,slug=null}){
     return Number(part?.value||0);
   };
   const slotDateTime=value=>new Intl.DateTimeFormat("ru-RU",{timeZone:bookingTz(),day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}).format(new Date(value));
+  const slotRange=x=>x?slotTime(x.start_at)+"–"+slotTime(x.end_at):"";
 
   let steps=(cfg.step_order||["location","service","staff","datetime"]).filter(x=>x!=="staff"||cfg.show_staff_step);
   steps=steps.filter((x,i,a)=>a.indexOf(x)===i);
@@ -1020,7 +1031,7 @@ async function bookingExperience({widgetKey=null,slug=null}){
       if(state.loadError)slotsPart='<div class="notice error">'+esc(state.loadError)+'</div><button type="button" class="btn secondary" id="retrySlots">Повторить загрузку</button>';
       else if(state.slots.length){
         const groups=[["Утро",x=>slotHour(x.start_at)<12],["Днём",x=>{const h=slotHour(x.start_at);return h>=12&&h<17}],["Вечером",x=>slotHour(x.start_at)>=17]];
-        slotsPart=groups.map(([title,test])=>{const items=state.slots.map((x,i)=>({x,i})).filter(({x})=>test(x));return items.length?'<div class="slot-section"><div class="slot-section-title">'+title+'</div><div class="slot-grid">'+items.map(({x,i})=>'<button type="button" class="slot '+(state.slot===i?"active":"")+'" data-slot="'+i+'">'+slotTime(x.start_at)+'</button>').join("")+'</div></div>':""}).join("");
+        slotsPart=groups.map(([title,test])=>{const items=state.slots.map((x,i)=>({x,i})).filter(({x})=>test(x));return items.length?'<div class="slot-section"><div class="slot-section-title">'+title+'</div><div class="slot-grid">'+items.map(({x,i})=>'<button type="button" class="slot '+(state.slot===i?"active":"")+'" data-slot="'+i+'"><b>'+slotTime(x.start_at)+'</b><span>'+slotTime(x.end_at)+'</span></button>').join("")+'</div></div>':""}).join("");
       }
       else slotsPart='<div class="muted" style="padding:18px 0">На этот день свободных окон нет.</div>'+(widgetKey&&cfg.waitlist_enabled?'<div class="waitlist-box"><b>Хотите, чтобы вам написали при появлении окна?</b><p class="muted tiny">Оставьте контакты — заявка попадёт администратору.</p><form id="waitlistForm" class="stack"><input name="name" placeholder="Имя" required><input name="phone" type="tel" placeholder="Телефон" required><input name="email" type="email" placeholder="Email — необязательно"><button class="btn secondary">Встать в лист ожидания</button><div id="waitlistResult"></div></form></div>':"");
       const windowStart=addIsoDays(isoDateInZone(new Date(),bookingTz()),state.dateOffset),windowEnd=addIsoDays(isoDateInZone(new Date(),bookingTz()),Math.min(bookingHorizon,state.dateOffset+6));
@@ -1029,7 +1040,7 @@ async function bookingExperience({widgetKey=null,slug=null}){
     }
     if(step==="contact"){
       const chosen=state.slots[state.slot];
-      body='<form id="contactForm" class="stack"><div class="summary"><b>'+esc(state.service?.name||"")+'</b><div class="muted tiny" style="margin-top:4px">'+esc(state.location?.name||"")+' · '+(chosen?slotDateTime(chosen.start_at):"")+(state.staff?" · "+esc(state.staff.name):"")+'</div></div><label class="field"><span>Ваше имя</span><input name="name" autocomplete="name" value="'+esc(state.contact.name)+'" required><span class="field-error" data-error="name"></span></label><label class="field"><span>Телефон</span><input name="phone" type="tel" inputmode="tel" autocomplete="tel" value="'+esc(state.contact.phone)+'" placeholder="+7 999 000-00-00" required><span class="field-error" data-error="phone"></span></label><label class="field"><span>Email <span class="muted">(необязательно)</span></span><input name="email" type="email" autocomplete="email" value="'+esc(state.contact.email)+'"><span class="field-error" data-error="email"></span></label><div class="contact-actions"><button type="button" class="btn secondary" id="contactBack">Назад</button><button class="btn brand" id="bookSubmit" style="background:'+cfg.primary_color+'">Подтвердить запись</button></div><div id="bookResult"></div></form>';
+      body='<form id="contactForm" class="stack"><div class="summary"><b>'+esc(state.service?.name||"")+'</b><div class="muted tiny" style="margin-top:4px">'+esc(state.location?.name||"")+' · '+(chosen?slotDateTime(chosen.start_at)+"–"+slotTime(chosen.end_at):"")+' · '+durationLabel(state.staff?.duration_minutes||state.service?.duration_minutes||0)+(state.staff?" · "+esc(state.staff.name):"")+'</div></div><label class="field"><span>Ваше имя</span><input name="name" autocomplete="name" value="'+esc(state.contact.name)+'" required><span class="field-error" data-error="name"></span></label><label class="field"><span>Телефон</span><input name="phone" type="tel" inputmode="tel" autocomplete="tel" value="'+esc(state.contact.phone)+'" placeholder="+7 999 000-00-00" required><span class="field-error" data-error="phone"></span></label><label class="field"><span>Email <span class="muted">(необязательно)</span></span><input name="email" type="email" autocomplete="email" value="'+esc(state.contact.email)+'"><span class="field-error" data-error="email"></span></label><div class="contact-actions"><button type="button" class="btn secondary" id="contactBack">Назад</button><button class="btn brand" id="bookSubmit" style="background:'+cfg.primary_color+'">Подтвердить запись</button></div><div id="bookResult"></div></form>';
     }
 
     const titles={location:"Выберите филиал",service:"Выберите услугу",staff:"К кому записаться?",datetime:"Выберите время",contact:"Контактные данные"};
