@@ -140,3 +140,5 @@ input:focus,select:focus,textarea:focus{border-color:#818cf8;box-shadow:0 0 0 3p
 
 .calendar-reschedule{display:grid;gap:12px;margin-top:18px;padding:14px;border:1px solid var(--line);border-radius:15px;background:#fbfdff}
 .calendar-reschedule>div:first-child b{display:block;font-size:13px}.calendar-reschedule>div:first-child span{display:block;margin-top:3px}
+
+.slot b{display:block;font-size:12px;line-height:1.1}.slot span{display:block;margin-top:3px;font-size:10px;color:#64748b}.slot.active span{color:rgba(255,255,255,.82)}
