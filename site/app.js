@@ -346,13 +346,80 @@ async function clientDetail(id){
 }
 
 async function schedule(){
-  if(!await requireAuth())return;const p=await profile(),manager=["owner","admin"].includes(p.role);const {data:staff,error}=await sb.from("staff_members").select("*").eq("active",true).order("name");if(error)return shell("schedule","Расписание",'<div class="notice error">'+esc(error.message)+'</div>');
-  const content='<div class="page-head"><div><h1>Расписание</h1><p>Рабочие часы и исключения по каждому сотруднику.</p></div></div>'+(staff?.length?'<div class="grid grid-3" id="staffSelector">'+staff.map((x,i)=>'<button class="card '+(i===0?"soft":"")+'" data-staff="'+x.id+'" style="text-align:left"><div class="person"><span class="avatar">'+initials(x.name)+'</span><div><b>'+esc(x.name)+'</b><small>Открыть график</small></div></div></button>').join("")+'</div><section id="schedulePane" style="margin-top:16px"></section>':emptyState("Нет сотрудников","Добавьте сотрудника в справочниках.","<a class='btn brand' href='#/catalog'>Добавить сотрудника</a>"));
-  await shell("schedule","Расписание",content);if(!staff?.length)return;
-  const load=async id=>{const target=staff.find(x=>x.id===id);document.querySelectorAll("[data-staff]").forEach(b=>b.classList.toggle("soft",b.dataset.staff===id));const [h,o]=await Promise.all([sb.from("working_hours").select("*").eq("staff_id",id).order("weekday"),sb.from("time_off").select("*").eq("staff_id",id).order("start_at")]);const hours=h.data||[],off=o.data||[],days=["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];document.querySelector("#schedulePane").innerHTML='<div class="grid grid-2"><div class="card"><div class="card-title"><div><h2>'+esc(target.name)+'</h2><p class="muted tiny">Регулярная неделя</p></div></div>'+days.map((d,i)=>{const row=hours.find(x=>x.weekday===i);return '<div class="spread" style="padding:10px 0;border-bottom:1px solid var(--line)"><b>'+d+'</b><div class="cluster"><span>'+(row?row.start_time.slice(0,5)+' – '+row.end_time.slice(0,5):'<span class="muted">Выходной</span>')+'</span>'+(manager&&row?'<button class="btn ghost sm" data-hour="'+row.id+'">×</button>':"")+'</div></div>'}).join("")+'</div><div class="stack">'+(manager?'<form id="hoursForm" class="card stack"><h3>Добавить рабочие часы</h3><div class="grid grid-3"><label class="field"><span>День</span><select name="weekday">'+days.map((x,i)=>'<option value="'+i+'">'+x+'</option>').join("")+'</select></label><label class="field"><span>С</span><input name="start" type="time" value="09:00"></label><label class="field"><span>До</span><input name="end" type="time" value="18:00"></label></div><button class="btn brand">Добавить</button></form><form id="offForm" class="card stack"><h3>Исключение / Time off</h3><div class="grid grid-2"><label class="field"><span>Начало</span><input name="start" type="datetime-local" required></label><label class="field"><span>Конец</span><input name="end" type="datetime-local" required></label></div><label class="field"><span>Причина</span><input name="reason" placeholder="Отпуск, обучение..."></label><button class="btn secondary">Добавить исключение</button></form>':"")+'<div class="card"><h3>Исключения</h3>'+(off.length?off.map(x=>'<div class="spread" style="padding:10px 0;border-bottom:1px solid var(--line)"><span>'+dt(x.start_at)+' → '+dt(x.end_at)+'</span>'+(manager?'<button class="btn danger sm" data-off="'+x.id+'">Удалить</button>':"")+'</div>').join(""):'<p class="muted tiny">Исключений нет.</p>')+'</div></div></div>';
-    if(manager){document.querySelector("#hoursForm")?.addEventListener("submit",async e=>{e.preventDefault();const f=new FormData(e.currentTarget),{error}=await sb.from("working_hours").insert({staff_id:id,weekday:Number(f.get("weekday")),start_time:f.get("start"),end_time:f.get("end")});if(error)toast(error.message,"error");else{toast("График обновлён");load(id)}});document.querySelector("#offForm")?.addEventListener("submit",async e=>{e.preventDefault();const f=new FormData(e.currentTarget),{error}=await sb.from("time_off").insert({staff_id:id,start_at:new Date(String(f.get("start"))).toISOString(),end_at:new Date(String(f.get("end"))).toISOString(),reason:f.get("reason")||null});if(error)toast(error.message,"error");else{toast("Исключение добавлено");load(id)}});document.querySelectorAll("[data-off]").forEach(b=>b.addEventListener("click",async()=>{await sb.from("time_off").delete().eq("id",b.dataset.off);load(id)}));document.querySelectorAll("[data-hour]").forEach(b=>b.addEventListener("click",async()=>{await sb.from("working_hours").delete().eq("id",b.dataset.hour);toast("Рабочий интервал удалён");load(id)}))}
+  if(!await requireAuth())return;
+  const p=await profile(),manager=["owner","admin"].includes(p.role);
+  const {data:staff,error}=await sb.from("staff_members").select("*,locations(name,timezone)").eq("active",true).order("name");
+  if(error)return shell("schedule","Расписание",'<div class="notice error">'+esc(friendlyError(error))+'</div>');
+  const content='<div class="page-head"><div><h1>Расписание</h1><p>Рабочие интервалы, перерывы и исключения по каждому сотруднику.</p></div></div>'+(staff?.length?'<div class="grid grid-3" id="staffSelector">'+staff.map((x,i)=>'<button class="card '+(i===0?"soft":"")+'" data-staff="'+x.id+'" style="text-align:left"><div class="person"><span class="avatar">'+initials(x.name)+'</span><div><b>'+esc(x.name)+'</b><small>'+esc(x.locations?.name||"Филиал")+'</small></div></div></button>').join("")+'</div><section id="schedulePane" style="margin-top:16px"></section>':emptyState("Нет сотрудников","Добавьте сотрудника в справочниках.","<a class='btn brand' href='#/catalog'>Добавить сотрудника</a>"));
+  await shell("schedule","Расписание",content);
+  if(!staff?.length)return;
+
+  const load=async id=>{
+    const target=staff.find(x=>x.id===id);
+    document.querySelectorAll("[data-staff]").forEach(b=>b.classList.toggle("soft",b.dataset.staff===id));
+    const [h,o]=await Promise.all([
+      sb.from("working_hours").select("*").eq("staff_id",id).order("weekday").order("start_time"),
+      sb.from("time_off").select("*").eq("staff_id",id).order("start_at")
+    ]);
+    const loadError=h.error||o.error;
+    if(loadError){document.querySelector("#schedulePane").innerHTML='<div class="notice error">'+esc(friendlyError(loadError))+'</div>';return}
+    const hours=h.data||[],off=o.data||[],days=["Пн","Вт","Ср","Чт","Пт","Сб","Вс"],tz=target.locations?.timezone||Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const localDateTime=value=>new Intl.DateTimeFormat("ru-RU",{timeZone:tz,day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}).format(new Date(value));
+    const weekHtml=days.map((d,i)=>{
+      const rows=hours.filter(x=>x.weekday===i);
+      return '<div class="schedule-day"><div class="schedule-day-label"><b>'+d+'</b><span class="muted tiny">'+(rows.length?rows.length+" интервал"+(rows.length>1?"а":""):"Выходной")+'</span></div><div class="schedule-intervals">'+(rows.length?rows.map(row=>'<div class="schedule-interval"><span>'+row.start_time.slice(0,5)+' – '+row.end_time.slice(0,5)+'</span>'+(manager?'<div class="cluster"><button type="button" class="btn ghost sm" data-edit-hour="'+row.id+'">Изменить</button><button type="button" class="btn ghost sm danger-text" data-delete-hour="'+row.id+'">×</button></div>':"")+'</div>').join(""):'<span class="muted tiny">Рабочих часов нет</span>')+'</div></div>';
+    }).join("");
+
+    document.querySelector("#schedulePane").innerHTML='<div class="grid grid-2"><div class="card"><div class="card-title"><div><h2>'+esc(target.name)+'</h2><p class="muted tiny">'+esc(target.locations?.name||"")+' · '+esc(tz)+' · можно задавать несколько интервалов в день</p></div></div>'+weekHtml+'</div><div class="stack">'+(manager?'<form id="hoursForm" class="card stack"><input type="hidden" name="hour_id"><div class="card-title"><div><h3 id="hoursFormTitle">Добавить рабочий интервал</h3><p class="muted tiny">Например: 09:00–13:00 и 14:00–18:00 для обеденного перерыва.</p></div></div><div class="grid grid-3"><label class="field"><span>День</span><select name="weekday">'+days.map((x,i)=>'<option value="'+i+'">'+x+'</option>').join("")+'</select></label><label class="field"><span>С</span><input name="start" type="time" value="09:00" required></label><label class="field"><span>До</span><input name="end" type="time" value="18:00" required></label></div><div class="cluster"><button class="btn brand" id="hoursSubmit">Добавить интервал</button><button type="button" class="btn secondary hidden" id="cancelHourEdit">Отмена</button></div></form><form id="offForm" class="card stack"><div><h3>Исключение / Time off</h3><p class="muted tiny">Время трактуется в timezone филиала: '+esc(tz)+'.</p></div><div class="grid grid-2"><label class="field"><span>Начало</span><input name="start" type="datetime-local" required></label><label class="field"><span>Конец</span><input name="end" type="datetime-local" required></label></div><label class="field"><span>Причина</span><input name="reason" placeholder="Отпуск, обучение, личное время..."></label><button class="btn secondary">Добавить исключение</button></form>':"")+'<div class="card"><h3>Исключения</h3>'+(off.length?off.map(x=>'<div class="spread schedule-off"><span><b>'+localDateTime(x.start_at)+'</b><span class="muted tiny"> → '+localDateTime(x.end_at)+(x.reason?" · "+esc(x.reason):"")+'</span></span>'+(manager?'<button class="btn danger sm" data-off="'+x.id+'">Удалить</button>':"")+'</div>').join(""):'<p class="muted tiny">Исключений нет.</p>')+'</div></div></div>';
+
+    if(manager){
+      const form=document.querySelector("#hoursForm");
+      const resetHourForm=()=>{
+        form.reset();form.elements.hour_id.value="";form.elements.start.value="09:00";form.elements.end.value="18:00";
+        document.querySelector("#hoursFormTitle").textContent="Добавить рабочий интервал";
+        document.querySelector("#hoursSubmit").textContent="Добавить интервал";
+        document.querySelector("#cancelHourEdit").classList.add("hidden");
+      };
+      document.querySelector("#cancelHourEdit")?.addEventListener("click",resetHourForm);
+      document.querySelectorAll("[data-edit-hour]").forEach(b=>b.addEventListener("click",()=>{
+        const row=hours.find(x=>x.id===b.dataset.editHour);if(!row)return;
+        form.elements.hour_id.value=row.id;form.elements.weekday.value=String(row.weekday);form.elements.start.value=row.start_time.slice(0,5);form.elements.end.value=row.end_time.slice(0,5);
+        document.querySelector("#hoursFormTitle").textContent="Изменить рабочий интервал";
+        document.querySelector("#hoursSubmit").textContent="Сохранить";
+        document.querySelector("#cancelHourEdit").classList.remove("hidden");
+        form.scrollIntoView({behavior:"smooth",block:"center"});
+      }));
+      form?.addEventListener("submit",async e=>{
+        e.preventDefault();
+        const f=new FormData(e.currentTarget),start=String(f.get("start")),end=String(f.get("end")),weekday=Number(f.get("weekday")),hourId=f.get("hour_id")||null;
+        if(start>=end)return toast("Время окончания должно быть позже начала","error");
+        const payload={staff_id:id,weekday,start_time:start,end_time:end};
+        const query=hourId?sb.from("working_hours").update(payload).eq("id",hourId):sb.from("working_hours").insert(payload);
+        const {error}=await query;
+        if(error)return toast(String(error.message||"").includes("working hours overlap")?"Интервал пересекается с уже существующим":friendlyError(error),"error");
+        toast(hourId?"Интервал изменён":"Интервал добавлен");load(id);
+      });
+      document.querySelector("#offForm")?.addEventListener("submit",async e=>{
+        e.preventDefault();
+        const f=new FormData(e.currentTarget),start=String(f.get("start")),end=String(f.get("end"));
+        if(!start||!end||end<=start)return toast("Проверьте начало и конец исключения","error");
+        try{
+          await rpcRetry("create_time_off_local",{p_staff_id:id,p_local_start:start,p_local_end:end,p_reason:f.get("reason")||null},{attempts:1,timeout:8000});
+          toast("Исключение добавлено");load(id);
+        }catch(err){toast(friendlyError(err),"error")}
+      });
+      document.querySelectorAll("[data-off]").forEach(b=>b.addEventListener("click",async()=>{
+        const {error}=await sb.from("time_off").delete().eq("id",b.dataset.off);
+        if(error)toast(friendlyError(error),"error");else{toast("Исключение удалено");load(id)}
+      }));
+      document.querySelectorAll("[data-delete-hour]").forEach(b=>b.addEventListener("click",async()=>{
+        const {error}=await sb.from("working_hours").delete().eq("id",b.dataset.deleteHour);
+        if(error)toast(friendlyError(error),"error");else{toast("Рабочий интервал удалён");load(id)}
+      }));
+    }
   };
-  document.querySelectorAll("[data-staff]").forEach(b=>b.addEventListener("click",()=>load(b.dataset.staff)));load(staff[0].id);
+  document.querySelectorAll("[data-staff]").forEach(b=>b.addEventListener("click",()=>load(b.dataset.staff)));
+  load(staff[0].id);
 }
 
 async function widgets(){
