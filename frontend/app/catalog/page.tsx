@@ -42,7 +42,10 @@ export default function CatalogPage() {
       return;
     }
     tokenRef.current = accessToken;
-    void load(accessToken);
+    const timer = window.setTimeout(() => {
+      void load(accessToken);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [load, router]);
 
   async function createLocation(event: FormEvent<HTMLFormElement>) {
