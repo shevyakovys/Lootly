@@ -12,7 +12,8 @@ const money=v=>new Intl.NumberFormat("ru-RU",{style:"currency",currency:"RUB",ma
 const dt=v=>v?new Date(v).toLocaleString("ru-RU",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}):"";
 const day=v=>v?new Date(v).toLocaleDateString("ru-RU",{weekday:"short",day:"numeric",month:"short"}):"";
 const initials=v=>String(v||"?").trim().split(/\s+/).slice(0,2).map(x=>x[0]?.toUpperCase()).join("");
-const todayIso=()=>new Date().toISOString().slice(0,10);
+const localIsoDate=d=>new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10);
+const todayIso=()=>localIsoDate(new Date());
 const icon=n=>({dashboard:"⌂",catalog:"▦",schedule:"◫",widgets:"◇",settings:"⚙",plus:"+",calendar:"▣",client:"◎",service:"✦",staff:"♙"}[n]||"•");
 const slugify=(value="")=>{const m={а:"a",б:"b",в:"v",г:"g",д:"d",е:"e",ё:"e",ж:"zh",з:"z",и:"i",й:"y",к:"k",л:"l",м:"m",н:"n",о:"o",п:"p",р:"r",с:"s",т:"t",у:"u",ф:"f",х:"h",ц:"c",ч:"ch",ш:"sh",щ:"sch",ъ:"",ы:"y",ь:"",э:"e",ю:"yu",я:"ya"};return String(value).trim().toLowerCase().split("").map(c=>m[c]??c).join("").replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"").slice(0,100)};
 
@@ -179,7 +180,7 @@ async function catalog(){
 function entityCard(tab,x){
   if(tab==="customers")return '<div class="spread" style="padding:13px 0;border-bottom:1px solid var(--line)"><div class="person"><span class="avatar">'+initials(x.name)+'</span><div><a href="#/client/'+x.id+'"><b>'+esc(x.name)+'</b></a><small>'+esc(x.phone)+' · '+esc(x.email||"без email")+'</small></div></div><span class="muted tiny">'+esc(x.note||"")+'</span></div>';
   if(tab==="services")return '<div class="spread" style="padding:13px 0;border-bottom:1px solid var(--line)"><div><div class="cluster"><b>'+esc(x.name)+'</b>'+(x.service_categories?.name?'<span class="category-label">'+esc(x.service_categories.name)+'</span>':"")+'</div><div class="muted tiny">'+x.duration_minutes+' мин</div></div><b>'+money(x.price)+'</b></div>';
-  if(tab==="staff"){const avatar=x.avatar_url?'<img class="staff-photo" src="'+esc(x.avatar_url)+'" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement(\'span\'),{className:\'avatar\',textContent:\''+initials(x.name)+'\'}))">':'<span class="avatar">'+initials(x.name)+'</span>';return '<div class="spread" style="padding:13px 0;border-bottom:1px solid var(--line)"><div class="person">'+avatar+'<div><b>'+esc(x.name)+'</b><small>'+(x.active?"Активен":"Неактивен")+'</small></div></div></div>'}
+  if(tab==="staff"){const avatar=x.avatar_url?'<img class="staff-photo" src="'+esc(x.avatar_url)+'" alt="" loading="lazy" onerror="this.style.display='none'">':'<span class="avatar">'+initials(x.name)+'</span>';return '<div class="spread" style="padding:13px 0;border-bottom:1px solid var(--line)"><div class="person">'+avatar+'<div><b>'+esc(x.name)+'</b><small>'+(x.active?"Активен":"Неактивен")+'</small></div></div></div>'}
   return '<div class="spread" style="padding:13px 0;border-bottom:1px solid var(--line)"><div><b>'+esc(x.name)+'</b><div class="muted tiny">'+esc(x.address||"Адрес не указан")+' · '+esc(x.timezone||"")+'</div></div></div>';
 }
 function bindAddEntity(tab,p,data){
@@ -370,7 +371,7 @@ async function bookingExperience({widgetKey=null,slug=null}){
   if(!services.length){showError("Запись ещё не настроена","У бизнеса пока нет активных услуг для онлайн-записи.",false);return}
 
   const sessionKey="lootly_"+(widgetKey||data.organization.slug);
-  let sk=sessionStorage.getItem(sessionKey);if(!sk){sk=crypto.randomUUID();sessionStorage.setItem(sessionKey,sk)}
+  let sk;try{sk=sessionStorage.getItem(sessionKey);if(!sk){sk=crypto.randomUUID();sessionStorage.setItem(sessionKey,sk)}}catch{sk=crypto.randomUUID()}
   if(widgetKey)rpcRetry("track_widget_event",{p_public_key:widgetKey,p_session_key:sk,p_event_type:"view"},{attempts:1,timeout:4000}).catch(()=>{});
   else rpcRetry("track_public_booking_view",{p_slug:data.organization.slug,p_session_key:sk},{attempts:1,timeout:4000}).catch(()=>{});
   if(widgetKey)window.parent?.postMessage({type:"lootly:ready",widgetKey},"*");
@@ -409,7 +410,7 @@ async function bookingExperience({widgetKey=null,slug=null}){
         : await rpcRetry("get_public_availability",args,{attempts:2});
     }catch(err){state.loadError=friendlyError(err);state.slots=[];throw err}
   }
-  const dateChips=()=>Array.from({length:7},(_,i)=>{const x=new Date();x.setDate(x.getDate()+i);const iso=x.toISOString().slice(0,10);return '<button type="button" class="date-chip '+(state.date===iso?"active":"")+'" data-date="'+iso+'"><span>'+x.toLocaleDateString("ru-RU",{weekday:"short"})+'</span><b>'+x.getDate()+'</b></button>'}).join("");
+  const dateChips=()=>Array.from({length:7},(_,i)=>{const x=new Date();x.setDate(x.getDate()+i);const iso=localIsoDate(x);return '<button type="button" class="date-chip '+(state.date===iso?"active":"")+'" data-date="'+iso+'"><span>'+x.toLocaleDateString("ru-RU",{weekday:"short"})+'</span><b>'+x.getDate()+'</b></button>'}).join("");
   const staffVisual=x=>x.avatar_url?'<img class="staff-photo" src="'+esc(x.avatar_url)+'" alt="" loading="lazy">':'<span class="avatar">'+initials(x.name)+'</span>';
   const groupedServices=()=>{
     const groups=new Map();
