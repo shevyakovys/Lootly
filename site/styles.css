@@ -121,3 +121,9 @@ input:focus,select:focus,textarea:focus{border-color:#818cf8;box-shadow:0 0 0 3p
 
 .duration-editor.compact{grid-template-columns:repeat(2,minmax(0,1fr))}
 @media(max-width:520px){.duration-editor.compact{grid-template-columns:1fr 1fr}}
+
+.calendar-modal-backdrop{position:fixed;inset:0;z-index:500;background:rgba(15,23,42,.42);backdrop-filter:blur(3px);display:grid;place-items:center;padding:20px}
+.calendar-modal{width:min(520px,100%);max-height:min(720px,calc(100vh - 40px));overflow:auto;background:#fff;border-radius:22px;padding:22px;box-shadow:0 28px 80px rgba(15,23,42,.28);animation:toastIn .16s ease}
+.calendar-modal-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:20px 0}.calendar-modal-grid>div{padding:12px;border:1px solid var(--line);border-radius:13px;background:#f8fafc}.calendar-modal-grid span{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:5px}.calendar-modal-grid b{font-size:13px}
+.calendar-modal-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:18px;padding-top:18px;border-top:1px solid var(--line)}
+@media(max-width:560px){.calendar-modal-backdrop{padding:0;align-items:end}.calendar-modal{width:100%;max-height:88vh;border-radius:22px 22px 0 0}.calendar-modal-grid{grid-template-columns:1fr}.calendar-modal-actions{grid-template-columns:1fr}}
