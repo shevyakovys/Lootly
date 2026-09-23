@@ -371,7 +371,7 @@ async function calendar(){
   const loadError=apptRes.error||staffRes.error||locRes.error||hoursRes.error;
   if(loadError)return shell("calendar","Календарь",'<div class="notice error">'+esc(friendlyError(loadError))+'</div>');
   const all=apptRes.data||[],staff=staffRes.data||[],locations=locRes.data||[],working=hoursRes.data||[];
-  let mode="week",anchor=todayIso(),staffFilter="",locationFilter="",gridStep=15;
+  let mode="week",anchor=todayIso(),staffFilter="",locationFilter="",gridStep=15,suppressEventClick=false;
   try{const stored=Number(localStorage.getItem("lootly_calendar_grid_step"));if([5,10,15,20,30,60].includes(stored))gridStep=stored}catch{}
   const hourFromTime=t=>Number(String(t||"08:00").slice(0,2));
   const minuteFromTime=t=>Number(String(t||"00:00").slice(3,5));
@@ -381,6 +381,29 @@ async function calendar(){
   const content='<div class="page-head"><div><h1>Календарь</h1><p>Рабочая неделя, загрузка команды и точный перенос записей.</p></div><div class="cluster"><select id="calendarMode" style="width:auto"><option value="week">Неделя</option><option value="day">День</option></select><select id="calendarGridStep" style="width:auto"><option value="5">Сетка 5 мин</option><option value="10">Сетка 10 мин</option><option value="15">Сетка 15 мин</option><option value="20">Сетка 20 мин</option><option value="30">Сетка 30 мин</option><option value="60">Сетка 60 мин</option></select><select id="calendarLocation" style="width:auto"><option value="">Все филиалы</option>'+locations.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'</select><select id="calendarStaff" style="width:auto"><option value="">Все сотрудники</option>'+staff.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'</select></div></div><div class="calendar-toolbar"><div class="cluster"><button class="btn secondary sm" id="calPrev">←</button><button class="btn secondary sm" id="calToday">Сегодня</button><button class="btn secondary sm" id="calNext">→</button></div><b id="calendarPeriod"></b><span class="muted tiny">'+(manager?"Перетащите запись — время привяжется к выбранной сетке.":"Календарь доступен только для просмотра.")+'</span></div><div class="calendar-grid week" id="calendarGrid"></div>';
   await shell("calendar","Календарь",content);
   document.querySelector("#calendarGridStep").value=String(gridStep);
+
+  function openAppointment(a){
+    document.querySelector("#calendarAppointmentModal")?.remove();
+    const tz=a.locations?.timezone||Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const modal=document.createElement("div");
+    modal.id="calendarAppointmentModal";modal.className="calendar-modal-backdrop";
+    const actions=manager&&["booked","confirmed"].includes(a.status)
+      ? '<div class="calendar-modal-actions"><button class="btn secondary" data-modal-status="confirmed">Подтвердить</button><button class="btn secondary" data-modal-status="completed">Завершить</button><button class="btn danger" data-modal-status="canceled">Отменить</button></div>'
+      : "";
+    modal.innerHTML='<div class="calendar-modal" role="dialog" aria-modal="true" aria-labelledby="calendarModalTitle"><div class="spread"><div><span class="status '+esc(a.status)+'">'+esc(statusLabel(a.status))+'</span><h2 id="calendarModalTitle" style="margin:10px 0 4px">'+esc(a.customers?.name||"Клиент")+'</h2><div class="muted">'+esc(a.customers?.phone||"")+'</div></div><button type="button" class="btn ghost" id="calendarModalClose" aria-label="Закрыть">×</button></div><div class="calendar-modal-grid"><div><span>Время</span><b>'+dtZone(a.start_at,tz)+' — '+new Intl.DateTimeFormat("ru-RU",{timeZone:tz,hour:"2-digit",minute:"2-digit"}).format(new Date(a.end_at))+'</b></div><div><span>Длительность</span><b>'+durationLabel(a.duration_minutes)+'</b></div><div><span>Услуга</span><b>'+esc(a.services?.name||"—")+'</b></div><div><span>Сотрудник</span><b>'+esc(a.staff_members?.name||"—")+'</b></div><div><span>Филиал</span><b>'+esc(a.locations?.name||"—")+'</b></div><div><span>Стоимость</span><b>'+money(a.price)+'</b></div></div><div class="cluster"><a class="btn secondary" href="#/client/'+a.customer_id+'">Карточка клиента</a></div>'+actions+'</div>';
+    document.body.append(modal);
+    const close=()=>modal.remove();
+    document.querySelector("#calendarModalClose")?.addEventListener("click",close);
+    modal.addEventListener("click",e=>{if(e.target===modal)close()});
+    const onKey=e=>{if(e.key==="Escape"){close();document.removeEventListener("keydown",onKey)}};
+    document.addEventListener("keydown",onKey);
+    modal.querySelectorAll("[data-modal-status]").forEach(b=>b.addEventListener("click",async()=>{
+      b.disabled=true;
+      const {error}=await sb.rpc("set_appointment_status",{p_appointment_id:a.id,p_status:b.dataset.modalStatus});
+      if(error){toast(friendlyError(error),"error");b.disabled=false;return}
+      toast("Статус обновлён");close();calendar();
+    }));
+  }
 
   function render(){
     const grid=document.querySelector("#calendarGrid");
@@ -403,25 +426,56 @@ async function calendar(){
     grid.innerHTML=html;
 
     const filtered=all.filter(a=>(!staffFilter||a.staff_id===staffFilter)&&(!locationFilter||a.location_id===locationFilter));
-    filtered.forEach(a=>{
+    const visible=filtered.map(a=>{
       const tz=a.locations?.timezone||Intl.DateTimeFormat().resolvedOptions().timeZone;
       const lp=localDateParts(a.start_at,tz);
-      if(!days.includes(lp.date)||lp.hour<startHour||lp.hour>=endHour)return;
+      return{a,tz,lp,start:lp.hour*60+lp.minute,end:lp.hour*60+lp.minute+Number(a.duration_minutes||60)};
+    }).filter(x=>days.includes(x.lp.date)&&x.lp.hour>=startHour&&x.lp.hour<endHour);
+    const layouts=new Map();
+    for(const date of days){
+      const items=visible.filter(x=>x.lp.date===date).sort((a,b)=>a.start-b.start||a.end-b.end);
+      let cluster=[],clusterEnd=-1;
+      const flush=()=>{
+        if(!cluster.length)return;
+        const colEnds=[],assigned=[];
+        cluster.forEach(item=>{
+          let col=colEnds.findIndex(end=>end<=item.start);
+          if(col<0){col=colEnds.length;colEnds.push(item.end)}else colEnds[col]=item.end;
+          assigned.push({item,col});
+        });
+        const cols=Math.max(1,colEnds.length);
+        assigned.forEach(({item,col})=>layouts.set(item.a.id,{col,cols}));
+        cluster=[];clusterEnd=-1;
+      };
+      items.forEach(item=>{
+        if(cluster.length&&item.start>=clusterEnd)flush();
+        cluster.push(item);clusterEnd=Math.max(clusterEnd,item.end);
+      });
+      flush();
+    }
+    visible.forEach(({a,lp})=>{
       const cell=grid.querySelector('.cal-cell[data-date="'+lp.date+'"][data-hour="'+lp.hour+'"]');
       if(!cell)return;
       const ev=document.createElement("div");
       ev.className="cal-event "+a.status;
       ev.draggable=manager&&["booked","confirmed"].includes(a.status);
       ev.dataset.appointment=a.id;
-      const height=Math.max(30,(Number(a.duration_minutes||60)/60)*hourHeight-5);
+      const height=Math.max(30,(Number(a.duration_minutes||60)/60)*hourHeight-5),layout=layouts.get(a.id)||{col:0,cols:1};
       ev.style.top=(3+(lp.minute/60)*hourHeight)+"px";ev.style.height=height+"px";
+      if(layout.cols>1){
+        ev.style.right="auto";
+        ev.style.left="calc("+(layout.col*100/layout.cols)+"% + 3px)";
+        ev.style.width="calc("+(100/layout.cols)+"% - 6px)";
+      }
       ev.innerHTML='<b>'+String(lp.hour).padStart(2,"0")+':'+String(lp.minute).padStart(2,"0")+' · '+esc(a.customers?.name||"Клиент")+'</b><span>'+esc(a.services?.name||"")+' · '+durationLabel(a.duration_minutes)+' · '+esc(a.staff_members?.name||"")+'</span>';
       ev.title=(a.customers?.name||"")+" · "+(a.services?.name||"")+" · "+durationLabel(a.duration_minutes)+" · "+statusLabel(a.status);
+      ev.addEventListener("click",()=>{if(!suppressEventClick)openAppointment(a)});
       cell.append(ev);
     });
 
     if(manager){
       grid.querySelectorAll(".cal-event[draggable=true]").forEach(ev=>ev.addEventListener("dragstart",e=>{
+        suppressEventClick=true;
         const rect=ev.getBoundingClientRect();
         const appointment=all.find(x=>x.id===ev.dataset.appointment);
         const duration=Number(appointment?.duration_minutes||60);
@@ -430,7 +484,7 @@ async function calendar(){
         e.dataTransfer.effectAllowed="move";
         requestAnimationFrame(()=>ev.classList.add("dragging"));
       }));
-      grid.querySelectorAll(".cal-event[draggable=true]").forEach(ev=>ev.addEventListener("dragend",()=>ev.classList.remove("dragging")));
+      grid.querySelectorAll(".cal-event[draggable=true]").forEach(ev=>ev.addEventListener("dragend",()=>{ev.classList.remove("dragging");setTimeout(()=>{suppressEventClick=false},120)}));
       grid.querySelectorAll(".cal-cell").forEach(cell=>{
         cell.addEventListener("dragover",e=>{e.preventDefault();cell.classList.add("drag-over")});
         cell.addEventListener("dragleave",()=>cell.classList.remove("drag-over"));
