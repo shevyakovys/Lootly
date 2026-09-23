@@ -217,7 +217,7 @@ async function renderQuickBooking(){
 
 async function catalog(){
   if(!await requireAuth())return;
-  const p=await profile(),manager=["owner","admin"].includes(p.role);
+  const p=await profile(),o=await org(),manager=["owner","admin"].includes(p.role);
   const [l,s,st,cust,cat,ss]=await Promise.all([
     sb.from("locations").select("*").order("name"),
     sb.from("services").select("*,service_categories(name)").order("name"),
@@ -384,14 +384,14 @@ async function calendar(){
   const loadError=apptRes.error||staffRes.error||locRes.error||hoursRes.error;
   if(loadError)return shell("calendar","Календарь",'<div class="notice error">'+esc(friendlyError(loadError))+'</div>');
   const all=apptRes.data||[],staff=staffRes.data||[],locations=locRes.data||[],working=hoursRes.data||[];
-  let mode="week",anchor=todayIso(),staffFilter="",locationFilter="",gridStep=15,suppressEventClick=false;
+  let mode="week",anchor=todayIso(),staffFilter="",locationFilter="",gridStep=[5,10,15,20,30,60].includes(Number(o.booking_interval_minutes))?Number(o.booking_interval_minutes):15,suppressEventClick=false;
   try{const stored=Number(localStorage.getItem("lootly_calendar_grid_step"));if([5,10,15,20,30,60].includes(stored))gridStep=stored}catch{}
   const hourFromTime=t=>Number(String(t||"08:00").slice(0,2));
   const minuteFromTime=t=>Number(String(t||"00:00").slice(3,5));
   const startHour=working.length?Math.max(0,Math.min(...working.map(x=>hourFromTime(x.start_time)))):8;
   const endHour=working.length?Math.min(24,Math.max(...working.map(x=>hourFromTime(x.end_time)+(minuteFromTime(x.end_time)>0?1:0)))):21;
 
-  const content='<div class="page-head"><div><h1>Календарь</h1><p>Рабочая неделя, загрузка команды и точный перенос записей.</p></div><div class="cluster"><select id="calendarMode" style="width:auto"><option value="week">Неделя</option><option value="day">День</option></select><select id="calendarGridStep" style="width:auto"><option value="5">Сетка 5 мин</option><option value="10">Сетка 10 мин</option><option value="15">Сетка 15 мин</option><option value="20">Сетка 20 мин</option><option value="30">Сетка 30 мин</option><option value="60">Сетка 60 мин</option></select><select id="calendarLocation" style="width:auto"><option value="">Все филиалы</option>'+locations.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'</select><select id="calendarStaff" style="width:auto"><option value="">Все сотрудники</option>'+staff.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'</select></div></div><div class="calendar-toolbar"><div class="cluster"><button class="btn secondary sm" id="calPrev">←</button><button class="btn secondary sm" id="calToday">Сегодня</button><button class="btn secondary sm" id="calNext">→</button></div><b id="calendarPeriod"></b><span class="muted tiny">'+(manager?"Перетащите запись — время привяжется к выбранной сетке.":"Календарь доступен только для просмотра.")+'</span></div><div class="calendar-grid week" id="calendarGrid"></div>';
+  const content='<div class="page-head"><div><h1>Календарь</h1><p>Рабочая неделя, загрузка команды и точный перенос записей.</p></div><div class="cluster"><select id="calendarMode" style="width:auto"><option value="week">Неделя</option><option value="day">День</option></select><select id="calendarGridStep" style="width:auto"><option value="5">Сетка 5 мин</option><option value="10">Сетка 10 мин</option><option value="15">Сетка 15 мин</option><option value="20">Сетка 20 мин</option><option value="30">Сетка 30 мин</option><option value="60">Сетка 60 мин</option></select><select id="calendarLocation" style="width:auto"><option value="">Все филиалы</option>'+locations.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'</select><select id="calendarStaff" style="width:auto"><option value="">Все сотрудники</option>'+staff.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'</select></div></div><div class="calendar-toolbar"><div class="cluster"><button class="btn secondary sm" id="calPrev">←</button><button class="btn secondary sm" id="calToday">Сегодня</button><button class="btn secondary sm" id="calNext">→</button></div><b id="calendarPeriod"></b><span class="muted tiny">'+(manager?"Сетка календаря влияет только на отображение и перенос. Онлайн-запись использует шаг "+Number(o.booking_interval_minutes||15)+" мин.":"Сетка календаря — только способ отображения.")+'</span></div><div class="calendar-grid week" id="calendarGrid"></div>';
   await shell("calendar","Календарь",content);
   document.querySelector("#calendarGridStep").value=String(gridStep);
 
@@ -493,7 +493,7 @@ async function calendar(){
         const appointment=all.find(x=>x.id===ev.dataset.appointment);
         const duration=Number(appointment?.duration_minutes||60);
         const grabMinutes=Math.max(0,Math.min(duration-1,((e.clientY-rect.top)/hourHeight)*60));
-        e.dataTransfer.setData("text/plain",JSON.stringify({id:ev.dataset.appointment,grabMinutes}));
+        e.dataTransfer.setData("text/plain",JSON.stringify({id:ev.dataset.appointment,grabMinutes,duration}));
         e.dataTransfer.effectAllowed="move";
         requestAnimationFrame(()=>ev.classList.add("dragging"));
       }));
@@ -510,7 +510,10 @@ async function calendar(){
           const pointerMinutes=Math.max(0,Math.min(59.999,((e.clientY-rect.top)/rect.height)*60));
           const rawStart=Number(cell.dataset.hour)*60+pointerMinutes-Number(payload.grabMinutes||0);
           const snapped=Math.round(rawStart/gridStep)*gridStep;
-          const minTotal=startHour*60,maxTotal=endHour*60-gridStep;
+          const minTotal=startHour*60;
+          const appointment=all.find(x=>x.id===payload.id);
+          const duration=Math.max(1,Number(payload.duration||appointment?.duration_minutes||60));
+          const maxTotal=Math.max(minTotal,endHour*60-duration);
           const totalMinutes=Math.max(minTotal,Math.min(maxTotal,snapped));
           const targetHour=Math.floor(totalMinutes/60),minute=totalMinutes%60;
           const time=String(targetHour).padStart(2,"0")+":"+String(minute).padStart(2,"0")+":00";
@@ -838,13 +841,14 @@ async function settings(){
   const team=profiles.map(x=>'<div class="spread" style="padding:12px 0;border-bottom:1px solid var(--line)"><div class="person"><span class="avatar">'+initials(x.email)+'</span><div><b>'+esc(x.email)+'</b><small>'+esc(x.role)+'</small></div></div><span class="status '+(x.active?"confirmed":"canceled")+'">'+(x.active?"Активен":"Выключен")+'</span></div>').join("");
   const inviteForm=manager?'<form id="inviteForm" class="card stack"><div class="card-title"><div><h2>Пригласить в команду</h2><p class="muted tiny">Создайте одноразовую ссылку для администратора или сотрудника.</p></div></div><div class="grid grid-2"><label class="field"><span>Роль</span><select name="role"><option value="admin">Администратор</option><option value="staff">Сотрудник</option></select></label><label class="field"><span>Связать с сотрудником</span><select name="staff"><option value="">Не связывать</option>'+staff.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'</select></label></div><button class="btn brand">Создать ссылку</button><div id="inviteResult"></div></form>':"";
   const inviteList=manager&&invites.length?'<section class="card"><div class="card-title"><h2>Активные приглашения</h2></div>'+invites.map(i=>'<div class="spread" style="padding:10px 0;border-bottom:1px solid var(--line)"><div><b>'+esc(i.role)+'</b><div class="muted tiny">до '+dt(i.expires_at)+'</div></div><button class="btn secondary sm" data-copy-invite="'+i.token+'">Копировать</button></div>').join("")+'</section>':"";
-  const intervalOptions=[5,10,15,20,30,60].map(v=>'<option value="'+v+'" '+(Number(o.booking_interval_minutes||15)===v?"selected":"")+'>'+v+' минут</option>').join("");
-  const bookingPrefs='<section class="card stack"><div><h2>Правила онлайн-записи</h2><p class="muted tiny">Эти ограничения применяются к клиентскому виджету. Администратор сможет создавать записи отдельно.</p></div><div class="grid grid-3"><label class="field"><span>Шаг начала</span><select id="bookingInterval" '+(manager?"":"disabled")+'>'+intervalOptions+'</select><small>Как часто предлагать новый старт.</small></label><label class="field"><span>Горизонт, дней</span><input id="bookingHorizon" type="number" min="1" max="365" value="'+Number(o.booking_horizon_days||60)+'" '+(manager?"":"disabled")+'><small>Насколько далеко вперёд можно записаться.</small></label><label class="field"><span>Минимум до записи, мин</span><input id="bookingNotice" type="number" min="0" max="10080" step="15" value="'+Number(o.min_booking_notice_minutes||0)+'" '+(manager?"":"disabled")+'><small>Например, 120 = не позднее чем за 2 часа.</small></label></div><div class="notice info">Длительность услуги не округляется. Услуга 1 ч 20 мин остаётся 80 минут независимо от шага старта.</div>'+(manager?'<button class="btn brand" id="saveBookingPolicy">Сохранить правила записи</button>':'')+'</section>';
+  const intervalPresets=[5,10,15,20,30,45,60];
+  const bookingPrefs='<section class="card stack"><div><h2>Правила онлайн-записи</h2><p class="muted tiny">Шаг старта, длительность услуги и сетка календаря — независимые настройки.</p></div><div class="grid grid-3"><label class="field"><span>Шаг начала, мин</span><input id="bookingInterval" type="number" min="1" max="120" step="1" value="'+Number(o.booking_interval_minutes||15)+'" '+(manager?"":"disabled")+'><small>Например, 10 → 09:00, 09:10, 09:20…</small><div class="interval-presets">'+intervalPresets.map(v=>'<button type="button" class="interval-preset" data-interval-preset="'+v+'" '+(manager?"":"disabled")+'>'+v+'</button>').join("")+'</div></label><label class="field"><span>Горизонт, дней</span><input id="bookingHorizon" type="number" min="1" max="365" value="'+Number(o.booking_horizon_days||60)+'" '+(manager?"":"disabled")+'><small>Насколько далеко вперёд можно записаться.</small></label><label class="field"><span>Минимум до записи, мин</span><input id="bookingNotice" type="number" min="0" max="10080" step="1" value="'+Number(o.min_booking_notice_minutes||0)+'" '+(manager?"":"disabled")+'><small>Например, 120 = не позднее чем за 2 часа.</small></label></div><div class="notice info"><b>Пример:</b> услуга длится 1 ч 20 мин, шаг старта 15 мин. Клиент может выбрать 09:00, 09:15, 09:30… Каждая запись при этом занимает полные 80 минут, а пересекающиеся варианты автоматически исключаются.</div>'+(manager?'<button class="btn brand" id="saveBookingPolicy">Сохранить правила записи</button>':'')+'</section>';
   const content='<div class="page-head"><div><h1>Настройки</h1><p>Онлайн-запись, публичные ссылки, команда и доступ.</p></div></div><div class="grid grid-2"><section class="card stack"><div><h2>'+esc(o.name)+'</h2><p class="muted">Организация · '+esc(p.role)+'</p></div><label class="field"><span>Публичная ссылка</span><input id="publicLink" readonly value="'+esc(booking)+'"></label><button class="btn secondary" id="copyPublic">Скопировать ссылку</button></section>'+bookingPrefs+'</div><section class="grid grid-2" style="margin-top:16px"><section class="card"><h2>Быстрый старт</h2><div class="checklist"><a class="checkitem" href="#/catalog"><span class="checkdot">1</span>Настройте услуги и сотрудников</a><a class="checkitem" href="#/schedule"><span class="checkdot">2</span>Заполните рабочее время</a><a class="checkitem" href="#/widgets"><span class="checkdot">3</span>Создайте виджет для сайта</a></div></section><div class="card"><div class="card-title"><h2>Команда</h2></div>'+(team||emptyState("Пока никого","Пригласите первого участника команды."))+'</div></section><section class="grid grid-2" style="margin-top:16px">'+inviteForm+inviteList+'</section>';
   await shell("settings","Настройки",content);
   document.querySelector("#copyPublic")?.addEventListener("click",async()=>{try{await navigator.clipboard.writeText(booking);toast("Ссылка скопирована")}catch{toast("Не удалось скопировать автоматически","error")}});
   document.querySelector("#saveBookingPolicy")?.addEventListener("click",async e=>{
     const btn=e.currentTarget,minutes=Number(document.querySelector("#bookingInterval").value),horizon=Number(document.querySelector("#bookingHorizon").value),notice=Number(document.querySelector("#bookingNotice").value);
+    if(!Number.isInteger(minutes)||minutes<1||minutes>120)return toast("Шаг начала должен быть целым числом от 1 до 120 минут","error");
     if(horizon<1||horizon>365)return toast("Горизонт должен быть от 1 до 365 дней","error");
     if(notice<0||notice>10080)return toast("Минимальное время — от 0 до 10080 минут","error");
     btn.disabled=true;btn.textContent="Сохраняем…";
@@ -856,6 +860,9 @@ async function settings(){
     }catch(err){toast(friendlyError(err),"error")}
     finally{btn.disabled=false;btn.textContent="Сохранить правила записи"}
   });
+  document.querySelectorAll("[data-interval-preset]").forEach(b=>b.addEventListener("click",()=>{
+    const input=document.querySelector("#bookingInterval");if(input)input.value=b.dataset.intervalPreset;
+  }));
   document.querySelector("#inviteForm")?.addEventListener("submit",async e=>{e.preventDefault();const f=new FormData(e.currentTarget),role=f.get("role"),staffId=f.get("staff")||null;if(role==="staff"&&!staffId)return toast("Для роли сотрудника выберите сотрудника","error");const {data,error}=await sb.from("user_invites").insert({organization_id:p.organization_id,role,staff_id:staffId}).select("token").single();if(error)return toast(friendlyError(error),"error");const link=location.href.split("#")[0]+"#/join/"+data.token;document.querySelector("#inviteResult").innerHTML='<div class="notice success">Ссылка создана. <button type="button" id="copyNewInvite" class="btn ghost sm">Копировать</button></div>';document.querySelector("#copyNewInvite").onclick=async()=>{await navigator.clipboard.writeText(link);toast("Ссылка приглашения скопирована")}});
   document.querySelectorAll("[data-copy-invite]").forEach(b=>b.addEventListener("click",async()=>{const link=location.href.split("#")[0]+"#/join/"+b.dataset.copyInvite;await navigator.clipboard.writeText(link);toast("Ссылка приглашения скопирована")}));
 }
