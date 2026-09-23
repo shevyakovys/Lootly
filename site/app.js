@@ -33,6 +33,8 @@ function friendlyError(error){
   if(raw.includes("rate limit"))return "Слишком много запросов. Подождите минуту и попробуйте снова.";
   if(raw.includes("no longer available")||raw.includes("exclusion"))return "Это время только что заняли. Мы обновили свободные слоты.";
   if(raw.includes("outside working hours"))return "Это время уже недоступно. Выберите другое.";
+  if(raw.includes("booking notice requirement"))return "До этого времени уже нельзя записаться. Выберите более поздний слот.";
+  if(raw.includes("booking outside horizon"))return "Эта дата находится за пределами доступного периода записи.";
   if(raw.includes("widget not found")||raw.includes("waitlist unavailable"))return "Эта форма записи сейчас недоступна.";
   if(raw.includes("failed to fetch")||raw.includes("network")||raw.includes("timeout"))return "Не удалось связаться с сервисом. Проверьте интернет и повторите попытку.";
   return error?.message||"Не удалось выполнить действие. Попробуйте ещё раз.";
@@ -770,16 +772,22 @@ async function settings(){
   const inviteForm=manager?'<form id="inviteForm" class="card stack"><div class="card-title"><div><h2>Пригласить в команду</h2><p class="muted tiny">Создайте одноразовую ссылку для администратора или сотрудника.</p></div></div><div class="grid grid-2"><label class="field"><span>Роль</span><select name="role"><option value="admin">Администратор</option><option value="staff">Сотрудник</option></select></label><label class="field"><span>Связать с сотрудником</span><select name="staff"><option value="">Не связывать</option>'+staff.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'</select></label></div><button class="btn brand">Создать ссылку</button><div id="inviteResult"></div></form>':"";
   const inviteList=manager&&invites.length?'<section class="card"><div class="card-title"><h2>Активные приглашения</h2></div>'+invites.map(i=>'<div class="spread" style="padding:10px 0;border-bottom:1px solid var(--line)"><div><b>'+esc(i.role)+'</b><div class="muted tiny">до '+dt(i.expires_at)+'</div></div><button class="btn secondary sm" data-copy-invite="'+i.token+'">Копировать</button></div>').join("")+'</section>':"";
   const intervalOptions=[5,10,15,20,30,60].map(v=>'<option value="'+v+'" '+(Number(o.booking_interval_minutes||15)===v?"selected":"")+'>'+v+' минут</option>').join("");
-  const bookingPrefs='<section class="card stack"><div><h2>Онлайн-запись</h2><p class="muted tiny">Шаг определяет, через сколько минут клиенту предлагается следующее возможное начало записи. Длительность услуги не округляется.</p></div><label class="field"><span>Шаг начала записи</span><select id="bookingInterval" '+(manager?"":"disabled")+'>'+intervalOptions+'</select><small>Пример: услуга 1 ч 20 мин и шаг 20 мин → 09:00–10:20, следующий старт может быть 10:20.</small></label>'+(manager?'<button class="btn brand" id="saveBookingInterval">Сохранить шаг записи</button>':'')+'</section>';
+  const bookingPrefs='<section class="card stack"><div><h2>Правила онлайн-записи</h2><p class="muted tiny">Эти ограничения применяются к клиентскому виджету. Администратор сможет создавать записи отдельно.</p></div><div class="grid grid-3"><label class="field"><span>Шаг начала</span><select id="bookingInterval" '+(manager?"":"disabled")+'>'+intervalOptions+'</select><small>Как часто предлагать новый старт.</small></label><label class="field"><span>Горизонт, дней</span><input id="bookingHorizon" type="number" min="1" max="365" value="'+Number(o.booking_horizon_days||60)+'" '+(manager?"":"disabled")+'><small>Насколько далеко вперёд можно записаться.</small></label><label class="field"><span>Минимум до записи, мин</span><input id="bookingNotice" type="number" min="0" max="10080" step="15" value="'+Number(o.min_booking_notice_minutes||0)+'" '+(manager?"":"disabled")+'><small>Например, 120 = не позднее чем за 2 часа.</small></label></div><div class="notice info">Длительность услуги не округляется. Услуга 1 ч 20 мин остаётся 80 минут независимо от шага старта.</div>'+(manager?'<button class="btn brand" id="saveBookingPolicy">Сохранить правила записи</button>':'')+'</section>';
   const content='<div class="page-head"><div><h1>Настройки</h1><p>Онлайн-запись, публичные ссылки, команда и доступ.</p></div></div><div class="grid grid-2"><section class="card stack"><div><h2>'+esc(o.name)+'</h2><p class="muted">Организация · '+esc(p.role)+'</p></div><label class="field"><span>Публичная ссылка</span><input id="publicLink" readonly value="'+esc(booking)+'"></label><button class="btn secondary" id="copyPublic">Скопировать ссылку</button></section>'+bookingPrefs+'</div><section class="grid grid-2" style="margin-top:16px"><section class="card"><h2>Быстрый старт</h2><div class="checklist"><a class="checkitem" href="#/catalog"><span class="checkdot">1</span>Настройте услуги и сотрудников</a><a class="checkitem" href="#/schedule"><span class="checkdot">2</span>Заполните рабочее время</a><a class="checkitem" href="#/widgets"><span class="checkdot">3</span>Создайте виджет для сайта</a></div></section><div class="card"><div class="card-title"><h2>Команда</h2></div>'+(team||emptyState("Пока никого","Пригласите первого участника команды."))+'</div></section><section class="grid grid-2" style="margin-top:16px">'+inviteForm+inviteList+'</section>';
   await shell("settings","Настройки",content);
   document.querySelector("#copyPublic")?.addEventListener("click",async()=>{try{await navigator.clipboard.writeText(booking);toast("Ссылка скопирована")}catch{toast("Не удалось скопировать автоматически","error")}});
-  document.querySelector("#saveBookingInterval")?.addEventListener("click",async e=>{
-    const btn=e.currentTarget,minutes=Number(document.querySelector("#bookingInterval").value);
+  document.querySelector("#saveBookingPolicy")?.addEventListener("click",async e=>{
+    const btn=e.currentTarget,minutes=Number(document.querySelector("#bookingInterval").value),horizon=Number(document.querySelector("#bookingHorizon").value),notice=Number(document.querySelector("#bookingNotice").value);
+    if(horizon<1||horizon>365)return toast("Горизонт должен быть от 1 до 365 дней","error");
+    if(notice<0||notice>10080)return toast("Минимальное время — от 0 до 10080 минут","error");
     btn.disabled=true;btn.textContent="Сохраняем…";
-    try{await rpcRetry("set_booking_interval",{p_minutes:minutes},{attempts:1,timeout:8000});o.booking_interval_minutes=minutes;if(currentOrg)currentOrg.booking_interval_minutes=minutes;toast("Шаг онлайн-записи: "+minutes+" мин")}
-    catch(err){toast(friendlyError(err),"error")}
-    finally{btn.disabled=false;btn.textContent="Сохранить шаг записи"}
+    try{
+      await rpcRetry("set_booking_policy",{p_interval_minutes:minutes,p_horizon_days:horizon,p_min_notice_minutes:notice},{attempts:1,timeout:8000});
+      Object.assign(o,{booking_interval_minutes:minutes,booking_horizon_days:horizon,min_booking_notice_minutes:notice});
+      if(currentOrg)Object.assign(currentOrg,o);
+      toast("Правила онлайн-записи сохранены");
+    }catch(err){toast(friendlyError(err),"error")}
+    finally{btn.disabled=false;btn.textContent="Сохранить правила записи"}
   });
   document.querySelector("#inviteForm")?.addEventListener("submit",async e=>{e.preventDefault();const f=new FormData(e.currentTarget),role=f.get("role"),staffId=f.get("staff")||null;if(role==="staff"&&!staffId)return toast("Для роли сотрудника выберите сотрудника","error");const {data,error}=await sb.from("user_invites").insert({organization_id:p.organization_id,role,staff_id:staffId}).select("token").single();if(error)return toast(friendlyError(error),"error");const link=location.href.split("#")[0]+"#/join/"+data.token;document.querySelector("#inviteResult").innerHTML='<div class="notice success">Ссылка создана. <button type="button" id="copyNewInvite" class="btn ghost sm">Копировать</button></div>';document.querySelector("#copyNewInvite").onclick=async()=>{await navigator.clipboard.writeText(link);toast("Ссылка приглашения скопирована")}});
   document.querySelectorAll("[data-copy-invite]").forEach(b=>b.addEventListener("click",async()=>{const link=location.href.split("#")[0]+"#/join/"+b.dataset.copyInvite;await navigator.clipboard.writeText(link);toast("Ссылка приглашения скопирована")}));
@@ -804,7 +812,7 @@ async function bookingExperience({widgetKey=null,slug=null}){
   if(!data){showError("Форма недоступна","Проверьте ссылку или попробуйте позже.",true);return}
 
   const cfg=widgetKey?data.widget:{title:data.organization.name,subtitle:"Онлайн-запись",primary_color:"#5b5cf0",show_staff_step:true,allow_any_staff:true,show_branding:true,waitlist_enabled:false,step_order:["location","service","staff","datetime"]};
-  const locs=data.locations||[],services=data.services||[];
+  const locs=data.locations||[],services=data.services||[],bookingHorizon=Math.max(1,Number(data.organization?.booking_horizon_days||60));
   if(!locs.length){showError("Запись ещё не настроена","У бизнеса пока нет активного филиала для онлайн-записи.",false);return}
   if(!services.length){showError("Запись ещё не настроена","У бизнеса пока нет активных услуг для онлайн-записи.",false);return}
 
@@ -869,7 +877,7 @@ async function bookingExperience({widgetKey=null,slug=null}){
   }
   const dateChips=()=>{
     const base=addIsoDays(isoDateInZone(new Date(),bookingTz()),state.dateOffset);
-    return Array.from({length:7},(_,i)=>{const iso=addIsoDays(base,i),x=new Date(iso+"T12:00:00Z");return '<button type="button" class="date-chip '+(state.date===iso?"active":"")+'" data-date="'+iso+'"><span>'+x.toLocaleDateString("ru-RU",{weekday:"short",timeZone:"UTC"})+'</span><b>'+x.getUTCDate()+'</b></button>'}).join("");
+    return Array.from({length:7},(_,i)=>i).filter(i=>state.dateOffset+i<=bookingHorizon).map(i=>{const iso=addIsoDays(base,i),x=new Date(iso+"T12:00:00Z");return '<button type="button" class="date-chip '+(state.date===iso?"active":"")+'" data-date="'+iso+'"><span>'+x.toLocaleDateString("ru-RU",{weekday:"short",timeZone:"UTC"})+'</span><b>'+x.getUTCDate()+'</b></button>'}).join("");
   };
   const staffVisual=x=>x.avatar_url?'<img class="staff-photo" src="'+esc(x.avatar_url)+'" alt="" loading="lazy">':'<span class="avatar">'+initials(x.name)+'</span>';
   const groupedServices=()=>{
@@ -904,9 +912,9 @@ async function bookingExperience({widgetKey=null,slug=null}){
         slotsPart=groups.map(([title,test])=>{const items=state.slots.map((x,i)=>({x,i})).filter(({x})=>test(x));return items.length?'<div class="slot-section"><div class="slot-section-title">'+title+'</div><div class="slot-grid">'+items.map(({x,i})=>'<button type="button" class="slot '+(state.slot===i?"active":"")+'" data-slot="'+i+'">'+slotTime(x.start_at)+'</button>').join("")+'</div></div>':""}).join("");
       }
       else slotsPart='<div class="muted" style="padding:18px 0">На этот день свободных окон нет.</div>'+(widgetKey&&cfg.waitlist_enabled?'<div class="waitlist-box"><b>Хотите, чтобы вам написали при появлении окна?</b><p class="muted tiny">Оставьте контакты — заявка попадёт администратору.</p><form id="waitlistForm" class="stack"><input name="name" placeholder="Имя" required><input name="phone" type="tel" placeholder="Телефон" required><input name="email" type="email" placeholder="Email — необязательно"><button class="btn secondary">Встать в лист ожидания</button><div id="waitlistResult"></div></form></div>':"");
-      const windowStart=addIsoDays(isoDateInZone(new Date(),bookingTz()),state.dateOffset),windowEnd=addIsoDays(windowStart,6);
+      const windowStart=addIsoDays(isoDateInZone(new Date(),bookingTz()),state.dateOffset),windowEnd=addIsoDays(isoDateInZone(new Date(),bookingTz()),Math.min(bookingHorizon,state.dateOffset+6));
       const windowLabel=new Date(windowStart+"T12:00:00Z").toLocaleDateString("ru-RU",{day:"numeric",month:"short",timeZone:"UTC"})+" — "+new Date(windowEnd+"T12:00:00Z").toLocaleDateString("ru-RU",{day:"numeric",month:"short",timeZone:"UTC"});
-      body='<div class="booking-date-nav"><button type="button" class="btn ghost sm" id="datePrev" '+(state.dateOffset===0?"disabled":"")+'>←</button><b>'+windowLabel+'</b><button type="button" class="btn ghost sm" id="dateNext" '+(state.dateOffset>=77?"disabled":"")+'>→</button></div><div class="date-strip">'+dateChips()+'</div>'+slotsPart;
+      body='<div class="booking-date-nav"><button type="button" class="btn ghost sm" id="datePrev" '+(state.dateOffset===0?"disabled":"")+'>←</button><b>'+windowLabel+'</b><button type="button" class="btn ghost sm" id="dateNext" '+(state.dateOffset+7>bookingHorizon?"disabled":"")+'>→</button></div><div class="date-strip">'+dateChips()+'</div>'+slotsPart;
     }
     if(step==="contact"){
       const chosen=state.slots[state.slot];
@@ -922,7 +930,7 @@ async function bookingExperience({widgetKey=null,slug=null}){
     document.querySelectorAll("[data-service]").forEach(b=>b.addEventListener("click",()=>{state.service=services.find(x=>x.id===b.dataset.service);state.staff=null;state.staffList=[];state.staffLoaded=false;state.slots=[];state.slotsLoadedFor=null;state.loadError=null;render()}));
     document.querySelectorAll("[data-staff]").forEach(b=>b.addEventListener("click",()=>{state.staff=b.dataset.staff?state.staffList.find(x=>x.id===b.dataset.staff):null;state.slots=[];state.slotsLoadedFor=null;state.loadError=null;render()}));
     document.querySelector("#datePrev")?.addEventListener("click",()=>{state.dateOffset=Math.max(0,state.dateOffset-7);state.date=addIsoDays(isoDateInZone(new Date(),bookingTz()),state.dateOffset);state.slots=[];state.slotsLoadedFor=null;state.loadError=null;render()});
-    document.querySelector("#dateNext")?.addEventListener("click",()=>{state.dateOffset=Math.min(77,state.dateOffset+7);state.date=addIsoDays(isoDateInZone(new Date(),bookingTz()),state.dateOffset);state.slots=[];state.slotsLoadedFor=null;state.loadError=null;render()});
+    document.querySelector("#dateNext")?.addEventListener("click",()=>{state.dateOffset=Math.min(bookingHorizon,state.dateOffset+7);state.date=addIsoDays(isoDateInZone(new Date(),bookingTz()),state.dateOffset);state.slots=[];state.slotsLoadedFor=null;state.loadError=null;render()});
     document.querySelectorAll("[data-date]").forEach(b=>b.addEventListener("click",async()=>{state.date=b.dataset.date;state.slots=[];state.slotsLoadedFor=null;state.loadError=null;try{await slotsLoad()}catch{}render()}));
     document.querySelectorAll("[data-slot]").forEach(b=>b.addEventListener("click",()=>{state.slot=Number(b.dataset.slot);render()}));
     document.querySelector("#retryStaff")?.addEventListener("click",async()=>{state.loadError=null;state.staffList=[];state.staffLoaded=false;render()});
