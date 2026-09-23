@@ -127,3 +127,8 @@ input:focus,select:focus,textarea:focus{border-color:#818cf8;box-shadow:0 0 0 3p
 .calendar-modal-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:20px 0}.calendar-modal-grid>div{padding:12px;border:1px solid var(--line);border-radius:13px;background:#f8fafc}.calendar-modal-grid span{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:5px}.calendar-modal-grid b{font-size:13px}
 .calendar-modal-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:18px;padding-top:18px;border-top:1px solid var(--line)}
 @media(max-width:560px){.calendar-modal-backdrop{padding:0;align-items:end}.calendar-modal{width:100%;max-height:88vh;border-radius:22px 22px 0 0}.calendar-modal-grid{grid-template-columns:1fr}.calendar-modal-actions{grid-template-columns:1fr}}
+
+.interval-presets{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.interval-preset{border:1px solid var(--line);background:#fff;color:#475569;border-radius:999px;padding:5px 9px;font-size:11px;font-weight:750;cursor:pointer}
+.interval-preset:hover{border-color:#a5b4fc;color:#4338ca;background:#eef2ff}
+.interval-preset:disabled{opacity:.45;cursor:not-allowed}
