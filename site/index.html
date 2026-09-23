@@ -16,7 +16,7 @@ label{display:grid;gap:6px;font-size:14px}input,select,textarea{width:100%;paddi
 button{border:0;border-radius:10px;padding:10px 14px;background:#111827;color:white;cursor:pointer}button.secondary{background:#e5e7eb;color:#111827}button.danger{background:#b91c1c}button:disabled{opacity:.45;cursor:not-allowed}
 .row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid #eef0f3}.row:last-child{border-bottom:0}
 .metric{font-size:30px;font-weight:800;margin-top:6px}.tag{display:inline-block;padding:4px 8px;border-radius:999px;background:#eef2ff;font-size:12px}
-.toolbar{display:flex;gap:8px;flex-wrap:wrap}.error{padding:10px 12px;background:#fee2e2;color:#991b1b;border-radius:10px}.ok{padding:10px 12px;background:#dcfce7;color:#166534;border-radius:10px}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap}.choice-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}.choice{padding:14px;border:1px solid #dbe1ea;border-radius:14px;background:#fff;color:#111827;text-align:left}.choice:hover{border-color:#9ca3af}.choice.active{border-color:var(--accent,#111827);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent,#111827) 18%,transparent)}.widget-shell{max-width:620px;margin:0 auto;background:#fff;min-height:100vh;padding:24px}.widget-progress{height:5px;background:#eef0f3;border-radius:999px;overflow:hidden;margin:14px 0 24px}.widget-progress>span{display:block;height:100%;background:var(--accent,#111827);transition:width .2s}.widget-step h2{margin-bottom:8px}.slot-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(92px,1fr));gap:8px}.slot{padding:10px;border:1px solid #dbe1ea;border-radius:10px;background:#fff;color:#111827}.slot.active{background:var(--accent,#111827);color:#fff;border-color:var(--accent,#111827)}.builder-layout{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(300px,.75fr);gap:20px;align-items:start}.preview-phone{position:sticky;top:88px;background:#111827;border-radius:28px;padding:10px;box-shadow:0 20px 50px rgba(15,23,42,.18)}.preview-screen{background:#f6f7f9;border-radius:20px;min-height:560px;padding:18px;overflow:hidden}.codebox{width:100%;min-height:112px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}.checkrow{display:flex;gap:10px;align-items:center}.checkrow input{width:auto}.pill-list{display:flex;flex-wrap:wrap;gap:8px}.pill{padding:7px 10px;border-radius:999px;border:1px solid #dbe1ea;background:#fff;font-size:13px}.pill input{width:auto;margin-right:6px}.error{padding:10px 12px;background:#fee2e2;color:#991b1b;border-radius:10px}.ok{padding:10px 12px;background:#dcfce7;color:#166534;border-radius:10px}
 h1,h2,h3{margin-top:0}.section{margin-top:24px}.hidden{display:none!important}@media(max-width:700px){.hero h1{font-size:36px}.row{align-items:flex-start;flex-direction:column}}
 </style>
 </head>
@@ -69,7 +69,7 @@ async function requireAuth(){
 }
 function setNav(auth){
   nav.innerHTML = auth
-    ? '<a href="#/dashboard">Журнал</a><a href="#/catalog">Справочники</a><a href="#/schedule">Расписание</a><button id="logoutBtn" class="secondary">Выйти</button>'
+    ? '<a href="#/dashboard">Журнал</a><a href="#/catalog">Справочники</a><a href="#/schedule">Расписание</a><a href="#/widgets">Виджеты</a><button id="logoutBtn" class="secondary">Выйти</button>'
     : '<a href="#/setup">Создать организацию</a><a href="#/login">Войти</a>';
   document.querySelector("#logoutBtn")?.addEventListener("click",async()=>{await sb.auth.signOut();currentProfile=null;location.hash="#/"});
 }
@@ -216,6 +216,211 @@ async function schedule(){
  document.querySelector("#schedStaff").addEventListener("change",load); if(sid)load();
 }
 
+
+async function widgetBuilder(){
+  if(!await requireAuth())return;
+  const p=await profile();
+  if(!["owner","admin"].includes(p.role)){
+    app.innerHTML=msg("Конструктор виджетов доступен владельцу и администратору.","error");return;
+  }
+
+  const [{data:widgets,error:werr},{data:locations},{data:services},{data:staff}] = await Promise.all([
+    sb.from("booking_widgets").select("*").order("created_at",{ascending:true}),
+    sb.from("locations").select("id,name").eq("active",true).order("name"),
+    sb.from("services").select("id,name").eq("active",true).order("name"),
+    sb.from("staff_members").select("id,name").eq("active",true).order("name")
+  ]);
+  if(werr){app.innerHTML=msg(werr.message,"error");return}
+
+  let list=widgets||[];
+  if(!list.length){
+    const {data,error}=await sb.from("booking_widgets").insert({
+      organization_id:p.organization_id,
+      name:"Основной виджет",
+      title:"Онлайн-запись",
+      subtitle:"Выберите услугу и удобное время"
+    }).select("*").single();
+    if(error){app.innerHTML=msg(error.message,"error");return}
+    list=[data];
+  }
+
+  let selected=list[0];
+  app.innerHTML='<div class="toolbar" style="justify-content:space-between;align-items:center"><div><h1 style="margin-bottom:4px">Виджеты онлайн-записи</h1><p class="muted">Создавайте независимые формы для сайта, лендингов и рекламных кампаний.</p></div><button id="newWidget">+ Новый виджет</button></div>'+
+  '<div class="builder-layout section"><div class="stack"><div class="card"><label>Виджет<select id="widgetSelect">'+list.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'</select></label></div><form id="widgetForm" class="card stack"></form><div class="card stack"><h3>Установка на сайт</h3><p class="muted">Вставьте код перед закрывающим тегом <code>&lt;/body&gt;</code>. Кнопка и форма загрузятся автоматически.</p><textarea id="embedCode" class="codebox" readonly></textarea><div class="toolbar"><button id="copyEmbed" type="button">Скопировать код</button><a id="openWidget" target="_blank"><button type="button" class="secondary">Открыть форму</button></a></div></div></div><aside class="preview-phone"><div class="preview-screen" id="widgetPreview"></div></aside></div>';
+
+  const select=document.querySelector("#widgetSelect");
+  const form=document.querySelector("#widgetForm");
+  const preview=document.querySelector("#widgetPreview");
+  const embed=document.querySelector("#embedCode");
+  const openWidget=document.querySelector("#openWidget");
+
+  const options=(items,selectedIds)=>items.map(x=>'<label class="pill"><input type="checkbox" value="'+x.id+'" '+(selectedIds.includes(x.id)?"checked":"")+'>'+esc(x.name)+'</label>').join("");
+
+  function renderEditor(){
+    const w=selected;
+    const locIds=w.location_ids||[], svcIds=w.service_ids||[], staffIds=w.staff_ids||[];
+    form.innerHTML='<h2 style="margin-bottom:4px">Настройки</h2>'+
+      '<div class="grid"><label>Название в кабинете<input name="name" value="'+esc(w.name)+'" required></label><label>Активен<select name="active"><option value="true" '+(w.active?"selected":"")+'>Да</option><option value="false" '+(!w.active?"selected":"")+'>Нет</option></select></label></div>'+
+      '<label>Заголовок формы<input name="title" value="'+esc(w.title||"Онлайн-запись")+'" required></label>'+
+      '<label>Подзаголовок<input name="subtitle" value="'+esc(w.subtitle||"")+'" placeholder="Выберите услугу и удобное время"></label>'+
+      '<div class="grid"><label>Основной цвет<input name="primary_color" type="color" value="'+esc(w.primary_color||"#111827")+'"></label><label>Текст кнопки<input name="button_text" value="'+esc(w.button_text||"Записаться")+'"></label></div>'+
+      '<div class="grid"><label>Положение кнопки<select name="button_position"><option value="bottom-right">Справа снизу</option><option value="bottom-left">Слева снизу</option><option value="top-right">Справа сверху</option><option value="top-left">Слева сверху</option></select></label><label>Открытие<select name="open_mode"><option value="drawer">Боковая панель</option><option value="modal">Модальное окно</option></select></label><label>Сторона панели<select name="panel_side"><option value="right">Справа</option><option value="left">Слева</option></select></label><label>Первые шаги<select name="step_preset"><option value="location-first">Сначала филиал</option><option value="service-first">Сначала услуга</option></select></label></div>'+
+      '<div class="grid"><label class="checkrow"><input name="button_animation" type="checkbox" '+(w.button_animation?"checked":"")+'>Анимация кнопки</label><label class="checkrow"><input name="show_staff_step" type="checkbox" '+(w.show_staff_step?"checked":"")+'>Показывать выбор специалиста</label><label class="checkrow"><input name="allow_any_staff" type="checkbox" '+(w.allow_any_staff?"checked":"")+'>Разрешить «любой специалист»</label><label class="checkrow"><input name="show_branding" type="checkbox" '+(w.show_branding?"checked":"")+'>Показывать «Powered by Lootly»</label></div>'+
+      '<div><b>Филиалы</b><p class="muted">Ничего не отмечено = все активные филиалы.</p><div class="pill-list" data-scope="locations">'+options(locations||[],locIds)+'</div></div>'+
+      '<div><b>Услуги</b><p class="muted">Ничего не отмечено = все активные услуги.</p><div class="pill-list" data-scope="services">'+options(services||[],svcIds)+'</div></div>'+
+      '<div><b>Сотрудники</b><p class="muted">Ничего не отмечено = все подходящие сотрудники.</p><div class="pill-list" data-scope="staff">'+options(staff||[],staffIds)+'</div></div>'+
+      '<div class="toolbar"><button type="submit">Сохранить настройки</button><button id="deleteWidget" type="button" class="danger">Удалить</button></div><div id="widgetMsg"></div>';
+    form.elements.button_position.value=w.button_position||"bottom-right";
+    form.elements.open_mode.value=w.open_mode||"drawer";
+    form.elements.panel_side.value=w.panel_side||"right";
+    form.elements.step_preset.value=(w.step_order||[])[0]==="service"?"service-first":"location-first";
+    updatePreview();
+    updateEmbed();
+  }
+
+  function collect(){
+    const checked=scope=>[...form.querySelectorAll('[data-scope="'+scope+'"] input:checked')].map(x=>x.value);
+    return {
+      organization_id:p.organization_id,
+      name:form.elements.name.value.trim(),
+      active:form.elements.active.value==="true",
+      title:form.elements.title.value.trim()||"Онлайн-запись",
+      subtitle:form.elements.subtitle.value.trim()||null,
+      primary_color:form.elements.primary_color.value,
+      button_text:form.elements.button_text.value.trim()||"Записаться",
+      button_position:form.elements.button_position.value,
+      panel_side:form.elements.panel_side.value,
+      open_mode:form.elements.open_mode.value,
+      button_animation:form.elements.button_animation.checked,
+      show_staff_step:form.elements.show_staff_step.checked,
+      allow_any_staff:form.elements.allow_any_staff.checked,
+      show_branding:form.elements.show_branding.checked,
+      location_ids:checked("locations"),
+      service_ids:checked("services"),
+      staff_ids:checked("staff"),
+      step_order:form.elements.step_preset.value==="service-first"
+        ? ["service","location","staff","datetime"]
+        : ["location","service","staff","datetime"],
+      updated_at:new Date().toISOString()
+    };
+  }
+
+  function updatePreview(){
+    const values=form.elements.name?collect():selected;
+    preview.style.setProperty("--accent",values.primary_color||"#111827");
+    preview.innerHTML='<div style="height:100%;display:flex;flex-direction:column"><div style="padding:14px 4px"><div style="font-weight:800;font-size:22px">'+esc(values.title||"Онлайн-запись")+'</div><div class="muted" style="margin-top:5px">'+esc(values.subtitle||"Выберите услугу и удобное время")+'</div></div><div class="widget-progress"><span style="width:34%"></span></div><div class="card" style="box-shadow:none"><div class="muted" style="font-size:12px">Шаг 1 из 4</div><h3 style="margin:8px 0 14px">'+((values.step_order||[])[0]==="service"?"Выберите услугу":"Выберите филиал")+'</h3><div class="choice-grid"><button class="choice active" type="button">Основной вариант</button><button class="choice" type="button">Другой вариант</button></div><button type="button" style="margin-top:18px;width:100%;background:'+values.primary_color+'">Продолжить</button></div><div style="margin-top:auto;text-align:center;padding-top:16px" class="muted">'+(values.show_branding?"Powered by Lootly":"")+'</div></div>';
+  }
+
+  function updateEmbed(){
+    const base="https://shevyakovys.github.io/Lootly";
+    embed.value='<script src="'+base+'/embed.js" data-lootly-widget="'+selected.public_key+'" async><'+'/script>';
+    openWidget.href=base+"/#/widget/"+selected.public_key;
+  }
+
+  select.addEventListener("change",()=>{selected=list.find(x=>x.id===select.value)||list[0];renderEditor()});
+  form.addEventListener("input",()=>updatePreview());
+  form.addEventListener("change",()=>updatePreview());
+  form.addEventListener("submit",async e=>{
+    e.preventDefault();
+    const values=collect(), out=document.querySelector("#widgetMsg");out.innerHTML="";
+    const {data,error}=await sb.from("booking_widgets").update(values).eq("id",selected.id).select("*").single();
+    if(error){out.innerHTML=msg(error.message,"error");return}
+    selected=data;list=list.map(x=>x.id===data.id?data:x);out.innerHTML=msg("Настройки сохранены");updateEmbed();
+  });
+  document.querySelector("#copyEmbed").addEventListener("click",async()=>{await navigator.clipboard.writeText(embed.value);document.querySelector("#copyEmbed").textContent="Скопировано";setTimeout(()=>document.querySelector("#copyEmbed").textContent="Скопировать код",1200)});
+  document.querySelector("#newWidget").addEventListener("click",async()=>{
+    const {data,error}=await sb.from("booking_widgets").insert({organization_id:p.organization_id,name:"Новый виджет",title:"Онлайн-запись",subtitle:"Выберите услугу и удобное время"}).select("*").single();
+    if(error){alert(error.message);return}list.push(data);selected=data;select.insertAdjacentHTML("beforeend",'<option value="'+data.id+'">'+esc(data.name)+'</option>');select.value=data.id;renderEditor();
+  });
+  form.addEventListener("click",async e=>{
+    if(e.target?.id!=="deleteWidget")return;
+    if(list.length===1){alert("Должен остаться хотя бы один виджет.");return}
+    if(!confirm("Удалить этот виджет? Код вставки перестанет работать."))return;
+    const {error}=await sb.from("booking_widgets").delete().eq("id",selected.id);if(error){alert(error.message);return}
+    list=list.filter(x=>x.id!==selected.id);selected=list[0];select.querySelector('option[value="'+e.target.dataset?.id+'"]')?.remove();select.innerHTML=list.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("");select.value=selected.id;renderEditor();
+  });
+
+  renderEditor();
+}
+
+async function publicWidget(publicKey){
+  document.querySelector("nav").classList.add("hidden");
+  app.style.maxWidth="none";app.style.padding="0";app.style.margin="0";
+  const {data,error}=await sb.rpc("get_public_widget",{p_public_key:publicKey});
+  if(error||!data){app.innerHTML='<div class="widget-shell">'+msg(error?.message||"Виджет недоступен","error")+'</div>';return}
+  const cfg=data.widget, locs=data.locations||[], services=data.services||[];
+  app.style.setProperty("--accent",cfg.primary_color||"#111827");
+
+  const state={location:null,service:null,staff:null,day:new Date().toISOString().slice(0,10),slot:null,staffList:[],slots:[],index:0};
+  let steps=(cfg.step_order||["location","service","staff","datetime"]).filter(x=>x!=="staff"||cfg.show_staff_step);
+  steps=steps.filter((x,i,a)=>["location","service","staff","datetime"].includes(x)&&a.indexOf(x)===i);
+  ["location","service","datetime"].forEach(x=>{if(!steps.includes(x))steps.push(x)});
+  steps.push("contact");
+
+  if(locs.length===1) state.location=locs[0];
+  if(services.length===1) state.service=services[0];
+
+  const titleFor=s=>({location:"Выберите филиал",service:"Выберите услугу",staff:"Выберите специалиста",datetime:"Выберите дату и время",contact:"Ваши контакты"}[s]||"Онлайн-запись");
+  const subtitleFor=s=>({location:"Где вам удобнее записаться?",service:"Что вы хотите сделать?",staff:"К кому хотите попасть?",datetime:"Покажем только свободное время",contact:"Осталось подтвердить запись"}[s]||"");
+
+  async function loadStaff(){
+    if(!state.location||!state.service)return;
+    const {data:rows,error}=await sb.rpc("get_public_widget_staff",{p_public_key:publicKey,p_location_id:state.location.id,p_service_id:state.service.id});
+    if(error)throw error;state.staffList=rows||[];
+  }
+  async function loadSlots(){
+    if(!state.location||!state.service)return;
+    const {data:rows,error}=await sb.rpc("get_public_widget_availability",{p_public_key:publicKey,p_location_id:state.location.id,p_service_id:state.service.id,p_day:state.day,p_staff_id:state.staff?.id||null});
+    if(error)throw error;state.slots=rows||[];state.slot=null;
+  }
+  function next(){if(state.index<steps.length-1){state.index++;render()}}
+  function back(){if(state.index>0){state.index--;render()}}
+
+  async function render(){
+    const step=steps[state.index];
+    if(step==="staff"&&state.location&&state.service&&!state.staffList.length){try{await loadStaff()}catch(e){app.innerHTML='<div class="widget-shell">'+msg(e.message,"error")+'</div>';return}}
+    if(step==="datetime"&&state.location&&state.service&&!state.slots.length){try{await loadSlots()}catch(e){app.innerHTML='<div class="widget-shell">'+msg(e.message,"error")+'</div>';return}}
+    const progress=Math.round(((state.index+1)/steps.length)*100);
+    let body="";
+    if(step==="location"){
+      body='<div class="choice-grid">'+locs.map(x=>'<button type="button" class="choice '+(state.location?.id===x.id?"active":"")+'" data-location="'+x.id+'"><b>'+esc(x.name)+'</b><div class="muted">'+esc(x.address||"")+'</div></button>').join("")+'</div>';
+    } else if(step==="service"){
+      body='<div class="choice-grid">'+services.map(x=>'<button type="button" class="choice '+(state.service?.id===x.id?"active":"")+'" data-service="'+x.id+'"><b>'+esc(x.name)+'</b><div class="muted">'+x.duration_minutes+' мин · '+money(x.price)+'</div></button>').join("")+'</div>';
+    } else if(step==="staff"){
+      body='<div class="choice-grid">'+(cfg.allow_any_staff?'<button type="button" class="choice '+(!state.staff?"active":"")+'" data-staff="">Любой доступный<div class="muted">Подберём автоматически</div></button>':"")+state.staffList.map(x=>'<button type="button" class="choice '+(state.staff?.id===x.id?"active":"")+'" data-staff="'+x.id+'"><b>'+esc(x.name)+'</b></button>').join("")+'</div>';
+    } else if(step==="datetime"){
+      body='<label>Дата<input id="widgetDay" type="date" value="'+state.day+'" min="'+new Date().toISOString().slice(0,10)+'"></label><div class="section"><div class="slot-grid">'+(state.slots.length?state.slots.map((x,i)=>'<button type="button" class="slot '+(state.slot===i?"active":"")+'" data-slot="'+i+'">'+new Date(x.start_at).toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"})+'</button>').join(""):'<div class="muted">На эту дату свободного времени нет.</div>')+'</div></div>';
+    } else {
+      body='<form id="widgetContact" class="stack"><div class="card" style="box-shadow:none;background:#f8fafc"><div><b>'+esc(state.service?.name||"")+'</b></div><div class="muted">'+esc(state.location?.name||"")+' · '+(state.slot!==null?dt(state.slots[state.slot]?.start_at):"")+'</div></div><label>Имя<input name="name" autocomplete="name" required></label><label>Телефон<input name="phone" autocomplete="tel" required></label><label>Email <span class="muted">(необязательно)</span><input name="email" type="email" autocomplete="email"></label><button>Подтвердить запись</button><div id="widgetResult"></div></form>';
+    }
+
+    app.innerHTML='<div class="widget-shell"><header><div style="font-weight:800;font-size:25px">'+esc(cfg.title||data.organization.name)+'</div><div class="muted" style="margin-top:5px">'+esc(cfg.subtitle||data.organization.name)+'</div></header><div class="widget-progress"><span style="width:'+progress+'%"></span></div><section class="widget-step"><div class="muted" style="font-size:12px">Шаг '+(state.index+1)+' из '+steps.length+'</div><h2 style="margin-top:6px">'+titleFor(step)+'</h2><p class="muted">'+subtitleFor(step)+'</p>'+body+'</section>'+(step!=="contact"?'<div class="toolbar" style="margin-top:22px;justify-content:space-between">'+(state.index?'<button type="button" class="secondary" id="widgetBack">Назад</button>':'<span></span>')+'<button type="button" id="widgetNext">Продолжить</button></div>':'')+(cfg.show_branding?'<div class="muted" style="text-align:center;font-size:12px;margin-top:24px">Powered by Lootly</div>':'')+'</div>';
+    document.querySelector("#widgetBack")?.addEventListener("click",back);
+    document.querySelectorAll("[data-location]").forEach(b=>b.addEventListener("click",()=>{state.location=locs.find(x=>x.id===b.dataset.location);state.staff=null;state.staffList=[];state.slots=[];render()}));
+    document.querySelectorAll("[data-service]").forEach(b=>b.addEventListener("click",()=>{state.service=services.find(x=>x.id===b.dataset.service);state.staff=null;state.staffList=[];state.slots=[];render()}));
+    document.querySelectorAll("[data-staff]").forEach(b=>b.addEventListener("click",()=>{state.staff=b.dataset.staff?state.staffList.find(x=>x.id===b.dataset.staff):null;state.slots=[];render()}));
+    document.querySelectorAll("[data-slot]").forEach(b=>b.addEventListener("click",()=>{state.slot=Number(b.dataset.slot);render()}));
+    document.querySelector("#widgetDay")?.addEventListener("change",async e=>{state.day=e.target.value;state.slots=[];await loadSlots();render()});
+    document.querySelector("#widgetNext")?.addEventListener("click",async()=>{
+      if(step==="location"&&!state.location)return alert("Выберите филиал");
+      if(step==="service"&&!state.service)return alert("Выберите услугу");
+      if(step==="staff"&&!cfg.allow_any_staff&&!state.staff)return alert("Выберите специалиста");
+      if(step==="datetime"&&state.slot===null)return alert("Выберите время");
+      if(step==="staff"){state.slots=[]}
+      next();
+    });
+    document.querySelector("#widgetContact")?.addEventListener("submit",async e=>{
+      e.preventDefault();const f=new FormData(e.currentTarget),out=document.querySelector("#widgetResult");
+      const slot=state.slots[state.slot];if(!slot){out.innerHTML=msg("Выберите время","error");return}
+      const staffId=state.staff?.id||slot.staff_id;
+      const {data:booking,error}=await sb.rpc("create_public_widget_booking",{p_public_key:publicKey,p_location_id:state.location.id,p_service_id:state.service.id,p_staff_id:staffId,p_start_at:slot.start_at,p_customer_name:f.get("name"),p_customer_phone:f.get("phone"),p_customer_email:f.get("email")||null,p_note:null,p_booking_key:crypto.randomUUID()});
+      if(error){out.innerHTML=msg(error.message,"error");state.slots=[];return}
+      app.innerHTML='<div class="widget-shell" style="display:grid;place-items:center;text-align:center"><div><div style="font-size:52px">✓</div><h1>Запись создана</h1><p class="muted">'+esc(state.service.name)+' · '+dt(booking.start_at)+'</p><p>Мы сохранили вашу запись.</p>'+(cfg.show_branding?'<div class="muted" style="font-size:12px;margin-top:30px">Powered by Lootly</div>':'')+'</div></div>';
+    });
+  }
+  render();
+}
+
 async function publicBook(slug){
  const {data:catalog,error}=await sb.rpc("get_public_catalog",{p_slug:slug});
  if(error||!catalog){app.innerHTML=msg(error?.message||"Организация не найдена","error");return}
@@ -230,6 +435,8 @@ async function publicBook(slug){
 }
 
 async function route(){
+ document.querySelector("nav").classList.remove("hidden");
+ app.style.maxWidth="1180px";app.style.padding="28px 18px 56px";app.style.margin="auto";
  await refreshNav();
  const parts=(location.hash||"#/").replace(/^#\//,"").split("/").filter(Boolean);
  try{
@@ -240,6 +447,8 @@ async function route(){
   if(parts[0]==="dashboard") return dashboard();
   if(parts[0]==="catalog") return catalog();
   if(parts[0]==="schedule") return schedule();
+  if(parts[0]==="widgets") return widgetBuilder();
+  if(parts[0]==="widget"&&parts[1]) return publicWidget(parts[1]);
   if(parts[0]==="book"&&parts[1]) return publicBook(parts[1]);
   home();
  }catch(e){app.innerHTML=msg(e?.message||"Ошибка","error")}
