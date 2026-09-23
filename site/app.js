@@ -598,6 +598,14 @@ async function calendar(){
           const maxTotal=Math.max(minTotal,endHour*60-duration);
           const totalMinutes=Math.max(minTotal,Math.min(maxTotal,snapped));
           const targetHour=Math.floor(totalMinutes/60),minute=totalMinutes%60;
+          const dateObj=new Date(cell.dataset.date+"T12:00:00Z"),weekday=(dateObj.getUTCDay()+6)%7;
+          const staffHours=working.filter(x=>x.staff_id===appointment?.staff_id&&Number(x.weekday)===weekday);
+          const fitsWorkingInterval=staffHours.some(x=>{
+            const [sh,sm]=String(x.start_time).slice(0,5).split(":").map(Number),[eh,em]=String(x.end_time).slice(0,5).split(":").map(Number);
+            const from=sh*60+sm,to=eh*60+em;
+            return totalMinutes>=from&&totalMinutes+duration<=to;
+          });
+          if(!fitsWorkingInterval)return toast("Запись целиком не помещается в рабочий интервал сотрудника","error");
           const time=String(targetHour).padStart(2,"0")+":"+String(minute).padStart(2,"0")+":00";
           try{
             await rpcRetry("reschedule_appointment_local",{p_appointment_id:payload.id,p_local_date:cell.dataset.date,p_local_time:time},{attempts:1,timeout:10000});
