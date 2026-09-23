@@ -110,3 +110,21 @@ sequenceDiagram
 - waitlist;
 - advanced analytics;
 - integrations.
+
+
+## Supabase free production architecture
+
+The active public deployment is serverless:
+
+```mermaid
+flowchart LR
+    B[Browser] --> W[Supabase Edge Function: web]
+    W --> A[Supabase Auth]
+    W --> R[PostgREST / RPC]
+    R --> P[(PostgreSQL)]
+    P --> O[Notification Outbox]
+```
+
+Booking concurrency is enforced in PostgreSQL with a GiST exclusion constraint for active
+appointments. Public clients never receive database secrets; they use the publishable key and only
+narrow public RPC functions. Administrative table access is restricted by RLS.
