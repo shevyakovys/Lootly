@@ -44,7 +44,7 @@
     :host{all:initial}
     @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.045)}}@keyframes enter{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
     *{box-sizing:border-box}.launcher{position:fixed;z-index:2147483000;border:0;border-radius:999px;padding:14px 20px;font:700 15px/1 system-ui,-apple-system,sans-serif;color:#fff;box-shadow:0 14px 36px rgba(15,23,42,.22);cursor:pointer;transition:.18s;white-space:nowrap}.launcher:hover{transform:translateY(-2px)}.launcher:focus-visible{outline:2px solid rgba(24,24,27,.20);outline-offset:3px}
-    .overlay{position:fixed;inset:0;z-index:2147482999;background:rgba(24,24,27,.28);backdrop-filter:blur(2px);display:flex;animation:enter .18s ease}.panel{position:relative;background:#fff;overflow:hidden;border:1px solid #e4e4e7;box-shadow:0 18px 54px rgba(0,0,0,.16);animation:enter .2s ease}.panel iframe{display:block;width:100%;height:100%;border:0;background:#fff}.close{position:absolute;right:12px;top:12px;z-index:2;width:38px;height:38px;border:0;border-radius:50%;background:rgba(24,24,27,.86);color:#fff;font:24px/1 system-ui;cursor:pointer}.fallback{position:fixed;left:16px;right:16px;bottom:16px;max-width:420px;margin:auto;padding:12px 14px;border-radius:14px;background:#fff;color:#18181b;border:1px solid #e4e4e7;box-shadow:0 14px 38px rgba(0,0,0,.12);font:13px/1.4 system-ui;z-index:2147483000}.fallback a{display:inline-block;margin-top:8px;font-weight:700;color:#18181b}
+    .overlay{position:fixed;inset:0;z-index:2147482999;background:rgba(24,24,27,.28);backdrop-filter:blur(2px);display:flex;animation:enter .18s ease}.panel{position:relative;background:#fff;overflow:hidden;border:1px solid #e4e4e7;box-shadow:0 18px 54px rgba(0,0,0,.16);animation:enter .2s ease}.panel iframe{display:block;width:100%;height:100%;border:0;background:#fff}.close{position:absolute;right:12px;top:12px;z-index:2;width:36px;height:36px;border:1px solid #d9dce1;border-radius:8px;background:#fff;color:#465361;display:grid;place-items:center;cursor:pointer;box-shadow:0 1px 2px rgba(24,36,51,.06)}.close:hover{background:#f8fafc}.close:focus-visible{outline:2px solid rgba(32,107,196,.35);outline-offset:2px}.fallback{position:fixed;left:16px;right:16px;bottom:16px;max-width:420px;margin:auto;padding:12px 14px;border-radius:14px;background:#fff;color:#18181b;border:1px solid #e4e4e7;box-shadow:0 14px 38px rgba(0,0,0,.12);font:13px/1.4 system-ui;z-index:2147483000}.fallback a{display:inline-block;margin-top:8px;font-weight:700;color:#18181b}
     @media(max-width:640px){.panel{width:100%!important;height:100%!important;max-width:none!important;border-radius:0!important}.launcher{max-width:calc(100vw - 32px)}}
     @media(prefers-reduced-motion:reduce){.launcher,.overlay,.panel{animation:none!important;transition:none!important}}
   `;shadow.append(style);document.body.append(host);
@@ -56,7 +56,7 @@
   };
 
   const mountFallback=(message)=>{
-    const button=document.createElement("button");button.className="launcher";button.textContent="Онлайн-запись";button.style.background="#18181b";positionButton(button,"bottom-right");
+    const button=document.createElement("button");button.className="launcher";button.textContent="Онлайн-запись";button.style.background="#206bc4";positionButton(button,"bottom-right");
     button.addEventListener("click",()=>window.open(WEB_URL+encodeURIComponent(key),"_blank","noopener"));
     shadow.append(button);
     emit("lootly:error",{stage:"init",message});
@@ -64,7 +64,7 @@
 
   const mount=(data)=>{
     const cfg=data.widget||{};
-    const button=document.createElement("button");button.className="launcher";button.type="button";button.textContent=cfg.button_text||"Записаться";button.style.background=cfg.primary_color||"#111827";positionButton(button,cfg.button_position||"bottom-right");if(cfg.button_animation)button.style.animation="pulse 2.5s ease-in-out infinite";button.setAttribute("aria-haspopup","dialog");button.setAttribute("aria-expanded","false");shadow.append(button);
+    const button=document.createElement("button");button.className="launcher";button.type="button";button.textContent=cfg.button_text||"Записаться";button.style.background=cfg.primary_color||"#206bc4";positionButton(button,cfg.button_position||"bottom-right");if(cfg.button_animation)button.style.animation="pulse 2.5s ease-in-out infinite";button.setAttribute("aria-haspopup","dialog");button.setAttribute("aria-expanded","false");shadow.append(button);
 
     let overlay=null,oldOverflow="",iframe=null,lastFocused=null;
     const close=()=>{
@@ -77,9 +77,9 @@
       rpc("track_widget_event",{p_public_key:key,p_session_key:sessionKey,p_event_type:"open"},{attempts:1,timeout:4000}).catch(()=>{});
       overlay=document.createElement("div");overlay.className="overlay";overlay.setAttribute("role","dialog");overlay.setAttribute("aria-modal","true");overlay.style.justifyContent=cfg.open_mode==="modal"?"center":(cfg.panel_side==="left"?"flex-start":"flex-end");overlay.style.alignItems=cfg.open_mode==="modal"?"center":"stretch";
       const panel=document.createElement("div");panel.className="panel";
-      if(cfg.open_mode==="modal"){panel.style.width="min(700px,calc(100vw - 36px))";panel.style.height="min(820px,calc(100vh - 36px))";panel.style.borderRadius="24px"}else{panel.style.width="min(570px,100vw)";panel.style.height="100%"}
+      if(cfg.open_mode==="modal"){panel.style.width="min(700px,calc(100vw - 36px))";panel.style.height="min(820px,calc(100vh - 36px))";panel.style.borderRadius="12px"}else{panel.style.width="min(570px,100vw)";panel.style.height="100%"}
       iframe=document.createElement("iframe");iframe.src=WEB_URL+encodeURIComponent(key);iframe.title=cfg.title||"Онлайн-запись";iframe.loading="eager";iframe.referrerPolicy="strict-origin-when-cross-origin";
-      const x=document.createElement("button");x.className="close";x.type="button";x.setAttribute("aria-label","Закрыть онлайн-запись");x.textContent="×";x.onclick=close;
+      const x=document.createElement("button");x.className="close";x.type="button";x.setAttribute("aria-label","Закрыть онлайн-запись");x.innerHTML='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18"/></svg>';x.onclick=close;
       panel.append(iframe,x);overlay.append(panel);overlay.addEventListener("click",e=>{if(e.target===overlay)close()});shadow.append(overlay);oldOverflow=document.documentElement.style.overflow;document.documentElement.style.overflow="hidden";x.focus();
     };
     button.addEventListener("click",open);
