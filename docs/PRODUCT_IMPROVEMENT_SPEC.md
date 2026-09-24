@@ -1,6 +1,6 @@
 # Lootly Product Improvement Specification
 
-Status: implementation plan for the current GitHub Pages/Supabase product.
+Status: IMPLEMENTED AND QA-CHECKED on 2026-09-24.
 
 ## Product goal
 Lootly should behave as a coherent scheduling SaaS for service businesses: services can have a base duration, every employee can override that duration, availability is generated from the employee's effective duration, and the admin calendar, dashboard, public booking flow and widget must all reflect the same scheduling rules.
@@ -87,3 +87,56 @@ Acceptance:
 
 ## Completion criteria
 Implementation is complete when all phases above are represented in code/database, static QA checks pass, the duration engine is verified in Supabase, and the production GitHub Pages assets are cache-busted.
+
+
+## Implementation result
+
+All phases in this specification are implemented in the current `main` branch.
+
+### Scheduling engine
+- Availability cadence now uses effective staff/service duration.
+- The legacy organization booking interval is not used by admin/public/widget availability generation.
+- Admin quick booking uses an authenticated staff/service RPC and does not consume the public rate limit.
+- "Any employee" availability is deterministic when several employees can start at the same time.
+- Server-side booking/rescheduling still validates full duration, working hours, time off and overlap constraints.
+
+### Staff duration management
+- The Staff catalog shows assigned services and their effective durations.
+- "Services and time" opens the employee-specific configuration.
+- Base duration and individual override modes are supported.
+- Exact hours/minutes entry and 30/45/60/80/90-minute presets are available.
+
+### Dashboard and public booking
+- Quick booking shows employee-specific duration and start/end for each slot.
+- Upcoming appointments contain separate Branch and Phone columns.
+- Search covers client, phone, branch, service and employee.
+- Search icon placement is fixed without pseudo-element overlap.
+- Public employee cards and slots show effective duration/start/end information.
+
+### Calendar and settings
+- Calendar grid is a local visual preference only.
+- Online booking cadence is not exposed as a global 15-minute setting.
+- Settings retain booking horizon and minimum notice.
+- Calendar drag/reschedule remains duration-aware and server-validated.
+
+### UI and release
+- A unified Tabler-inspired component layer is applied across admin, public booking and embed shell.
+- SVG icons replace interactive Unicode pseudo-icons.
+- Responsive table scrolling, focus styles and success/empty states are included.
+- Final assets are cache-busted in `site/index.html`.
+
+## QA evidence
+
+- `site/app.js`: syntax parse passed.
+- `site/embed.js`: syntax parse passed.
+- `site/styles.css`: brace balance = 0.
+- Availability RPC audit:
+  - `get_admin_availability`: effective-duration cadence = yes; legacy interval cadence = no.
+  - `get_public_availability`: effective-duration cadence = yes; legacy interval cadence = no.
+  - `get_public_widget_availability`: effective-duration cadence = yes; legacy interval cadence = no.
+- Representative cadence calculation verified in PostgreSQL:
+  - 30 min: 09:00–09:30, 09:30–10:00...
+  - 60 min: 09:00–10:00, 10:00–11:00...
+  - 80 min: 09:00–10:20, 10:20–11:40, 11:40–13:00.
+- Current production test data for a 60-minute employee returned hourly public availability.
+- Supabase security advisors were run after migrations. Public booking SECURITY DEFINER warnings remain intentional because those RPCs are the externally exposed booking API and contain validation/rate limiting; manager RPCs validate authenticated organization/role internally.
