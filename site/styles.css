@@ -2481,3 +2481,73 @@ select:disabled,input:disabled,textarea:disabled{
   .premium-search{width:100%!important}
   .appointments-filters{width:100%!important}
 }
+
+
+/* Spec completion polish v7 */
+.back-link{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  text-decoration:none;
+}
+.back-link .ui-icon{width:15px;height:15px}
+.booking-success-icon{
+  width:64px;
+  height:64px;
+  margin:0 auto 18px;
+  border-radius:50%;
+  display:grid;
+  place-items:center;
+  color:#2b8a3e;
+  background:#edf9ef;
+  border:1px solid #d5efda;
+}
+.booking-success-icon .ui-icon{width:30px;height:30px;stroke-width:2}
+.check-pending{
+  width:6px;
+  height:6px;
+  display:block;
+  border-radius:999px;
+  background:#a9b4c2;
+}
+.checkdot .ui-icon{width:15px;height:15px}
+.route-dashboard .appointments-panel .table-wrap{
+  overflow:auto;
+  overscroll-behavior-inline:contain;
+}
+.route-dashboard .appointments-table td,
+.route-dashboard .appointments-table th{
+  white-space:nowrap;
+}
+.route-dashboard .appointments-table td:nth-child(3),
+.route-dashboard .appointments-table th:nth-child(3),
+.route-dashboard .appointments-table td:nth-child(5),
+.route-dashboard .appointments-table th:nth-child(5){
+  white-space:normal;
+}
+.route-catalog .staff-list-row>.btn .ui-icon{
+  width:15px;height:15px
+}
+.staff-duration-card .duration-setting-copy{
+  min-width:0;
+}
+.staff-duration-card .duration-setting-copy span{
+  line-height:1.35;
+}
+.booking-card .slot{
+  display:flex!important;
+  align-items:center;
+  justify-content:center;
+  gap:5px;
+}
+.booking-card .slot span{
+  opacity:.72;
+  font-size:11px;
+}
+.booking-card .slot b{
+  font-size:13px;
+}
+@media(max-width:760px){
+  .booking-success-icon{width:56px;height:56px}
+  .booking-success-icon .ui-icon{width:26px;height:26px}
+}
