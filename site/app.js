@@ -181,15 +181,17 @@ async function renderQuickBooking(){
   ]);
   const loadError=l.error||s.error||custRes.error;
   if(loadError){root.innerHTML='<div class="notice error">'+esc(friendlyError(loadError))+'</div>';return}
-  const loc=l.data||[],svc=s.data||[],cust=custRes.data||[];
-  if(!loc.length||!svc.length||!cust.length){
-    root.innerHTML='<div class="card"><h2>Новая запись</h2><p class="muted">Сначала добавьте филиал, услугу и клиента в справочниках.</p><a class="btn secondary" href="#/catalog">Открыть справочники</a></div>';return
+  const loc=l.data||[],svc=s.data||[];let cust=custRes.data||[];
+  if(!loc.length||!svc.length){
+    root.innerHTML='<div class="card"><h2>Новая запись</h2><p class="muted">Сначала добавьте филиал и услугу в справочниках.</p><a class="btn secondary" href="#/catalog">Открыть справочники</a></div>';return
   }
 
-  root.innerHTML='<form id="quickBook" class="card stack booking-create-card"><div class="card-title booking-create-head"><div><h2>Новая запись</h2><p class="muted tiny">Показываем только сотрудников и время, доступные для выбранной услуги.</p></div><span class="status confirmed duration-badge" id="quickDuration">—</span></div><div class="grid grid-4 booking-primary-fields"><label class="field field-location"><span>Филиал</span><select name="location">'+loc.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'</select></label><label class="field field-service"><span>Услуга</span><select name="service">'+svc.map(x=>'<option value="'+x.id+'">'+esc(x.name)+' · '+durationLabel(x.duration_minutes)+'</option>').join("")+'</select></label><label class="field field-staff"><span>Сотрудник</span><select name="staff"><option value="">Загрузка…</option></select></label><label class="field field-client"><span>Клиент</span><select name="customer">'+cust.map(x=>'<option value="'+x.id+'">'+esc(x.name)+' · '+esc(x.phone)+'</option>').join("")+'</select></label></div><div class="quick-book-mode"><button type="button" class="active" data-quick-mode="slots">Свободные слоты</button><button type="button" data-quick-mode="manual">Точное время</button></div><div class="grid grid-2 booking-time-fields"><label class="field field-date"><span>Дата</span><input type="date" name="day"></label><label class="field field-time" id="quickSlotField"><span>Свободное время</span><select name="slot"><option value="">Загрузка…</option></select></label><label class="field field-time hidden" id="quickManualField"><span>Время начала</span><input type="time" name="manual_time" step="60"><small id="manualTimeHint">Длительность услуги будет учтена автоматически.</small></label></div><div id="quickBookInfo" class="booking-info muted tiny"></div><div class="booking-submit-row"><button class="btn brand" id="quickBookSubmit"><span class="btn-plus">'+icon("plus")+'</span><span>Создать запись</span>'+icon("arrowRight","btn-arrow-icon")+'</button></div></form>';
+  const customerOptions=()=>cust.map(x=>'<option value="'+x.id+'">'+esc(x.name)+' · '+esc(x.phone)+'</option>').join("")+'<option value="__new__">+ Добавить нового клиента</option>';
+
+  root.innerHTML='<form id="quickBook" class="card stack booking-create-card"><div class="card-title booking-create-head"><div><h2>Новая запись</h2><p class="muted tiny">Показываем только сотрудников и время, доступные для выбранной услуги.</p></div><span class="status confirmed duration-badge" id="quickDuration">—</span></div><div class="grid grid-4 booking-primary-fields"><label class="field field-location"><span>Филиал</span><select name="location">'+loc.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")+'</select></label><label class="field field-service"><span>Услуга</span><select name="service">'+svc.map(x=>'<option value="'+x.id+'">'+esc(x.name)+' · '+durationLabel(x.duration_minutes)+'</option>').join("")+'</select></label><label class="field field-staff"><span>Сотрудник</span><select name="staff"><option value="">Загрузка…</option></select></label><label class="field field-client"><span>Клиент</span><div class="client-select-row"><select name="customer">'+customerOptions()+'</select><button type="button" class="btn secondary client-add-trigger" id="quickAddClientBtn" aria-label="Добавить нового клиента" title="Добавить нового клиента">'+icon("plus")+'</button></div></label></div><div class="quick-new-client hidden" id="quickNewClient"><div class="quick-new-client-head"><div><b>Новый клиент</b><span>Добавьте клиента и сразу продолжите запись.</span></div><button type="button" class="btn ghost sm" id="quickCancelClient">'+icon("close")+'</button></div><div class="grid grid-3"><label class="field"><span>Имя</span><input id="quickClientName" autocomplete="name" placeholder="Имя клиента"></label><label class="field"><span>Телефон</span><input id="quickClientPhone" autocomplete="tel" placeholder="+7 ..."></label><label class="field"><span>Email</span><input id="quickClientEmail" type="email" autocomplete="email" placeholder="email@example.com"></label></div><div class="quick-new-client-actions"><button type="button" class="btn brand" id="quickSaveClient">'+icon("plus")+'<span>Добавить клиента</span></button><span class="muted tiny" id="quickClientMsg"></span></div></div><div class="quick-book-mode"><button type="button" class="active" data-quick-mode="slots">Свободные слоты</button><button type="button" data-quick-mode="manual">Точное время</button></div><div class="grid grid-2 booking-time-fields"><label class="field field-date"><span>Дата</span><input type="date" name="day"></label><label class="field field-time" id="quickSlotField"><span>Свободное время</span><select name="slot"><option value="">Загрузка…</option></select></label><label class="field field-time hidden" id="quickManualField"><span>Время начала</span><input type="time" name="manual_time" step="60"><small id="manualTimeHint">Длительность услуги будет учтена автоматически.</small></label></div><div id="quickBookInfo" class="booking-info muted tiny"></div><div class="booking-submit-row"><button class="btn brand" id="quickBookSubmit"><span class="btn-plus">'+icon("plus")+'</span><span>Создать запись</span>'+icon("arrowRight","btn-arrow-icon")+'</button></div></form>';
 
   const f=document.querySelector("#quickBook"),o=await org();
-  let eligibleStaff=[],quickMode="slots";
+  let eligibleStaff=[],quickMode="slots",slotRows=[];
   const dateInZone=(tz)=>{
     const parts=new Intl.DateTimeFormat("en-CA",{timeZone:tz,year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date());
     const get=type=>parts.find(x=>x.type===type)?.value;
@@ -197,6 +199,13 @@ async function renderQuickBooking(){
   };
   const currentLocation=()=>loc.find(x=>x.id===f.elements.location.value)||loc[0];
   const formatSlot=(value,tz)=>new Intl.DateTimeFormat("ru-RU",{timeZone:tz,hour:"2-digit",minute:"2-digit"}).format(new Date(value));
+  const hasCustomer=()=>Boolean(f.elements.customer.value&&f.elements.customer.value!=="__new__");
+  const syncSubmit=()=>{
+    const submit=document.querySelector("#quickBookSubmit");
+    if(!submit)return;
+    if(quickMode==="manual")submit.disabled=!f.elements.staff.value||!f.elements.manual_time.value||!hasCustomer();
+    else submit.disabled=!f.elements.staff.value||!f.elements.slot.value||!hasCustomer();
+  };
   const updateManualHint=()=>{
     const hint=document.querySelector("#manualTimeHint"),time=f.elements.manual_time?.value,staffId=f.elements.staff?.value;
     if(!hint)return;
@@ -211,20 +220,33 @@ async function renderQuickBooking(){
     f.elements.day.min=today;
     if(!f.elements.day.value||f.elements.day.value<today)f.elements.day.value=today;
   };
+  const showNewClient=show=>{
+    document.querySelector("#quickNewClient")?.classList.toggle("hidden",!show);
+    if(show){
+      f.elements.customer.value="__new__";
+      document.querySelector("#quickClientName")?.focus();
+    }else if(f.elements.customer.value==="__new__"){
+      f.elements.customer.value=cust[0]?.id||"";
+    }
+    syncSubmit();
+  };
   const loadSlots=async()=>{
     if(quickMode==="manual"){syncQuickMode();return}
     const staffId=f.elements.staff.value,location=currentLocation(),info=document.querySelector("#quickBookInfo"),submit=document.querySelector("#quickBookSubmit");
+    slotRows=[];
     if(!staffId){f.elements.slot.innerHTML='<option value="">Нет доступного сотрудника</option>';submit.disabled=true;return}
     f.elements.slot.disabled=true;f.elements.slot.innerHTML='<option value="">Загрузка…</option>';submit.disabled=true;
     const {data,error}=await sb.rpc("get_admin_availability",{p_location_id:location.id,p_service_id:f.elements.service.value,p_day:f.elements.day.value,p_staff_id:staffId});
     if(error){
       f.elements.slot.innerHTML='<option value="">Не удалось загрузить время</option>';info.textContent=friendlyError(error);return
     }
-    const rows=data||[],staffRow=eligibleStaff.find(x=>x.id===staffId),duration=Number(staffRow?.duration_minutes||svc.find(x=>x.id===f.elements.service.value)?.duration_minutes||0);
+    slotRows=data||[];
+    const staffRow=eligibleStaff.find(x=>x.id===staffId),duration=Number(staffRow?.duration_minutes||svc.find(x=>x.id===f.elements.service.value)?.duration_minutes||0);
     document.querySelector("#quickDuration").textContent=durationLabel(duration);
-    f.elements.slot.innerHTML='<option value="">Выберите время</option>'+rows.map(x=>'<option value="'+x.start_at+'">'+formatSlot(x.start_at,location.timezone)+' – '+formatSlot(x.end_at,location.timezone)+'</option>').join("");
-    f.elements.slot.disabled=!rows.length;submit.disabled=!rows.length;
-    info.textContent=rows.length?"Время показано в часовом поясе филиала: "+location.timezone:"На выбранную дату свободных окон нет.";
+    f.elements.slot.innerHTML='<option value="">Выберите время</option>'+slotRows.map(x=>'<option value="'+x.start_at+'">'+formatSlot(x.start_at,location.timezone)+' – '+formatSlot(x.end_at,location.timezone)+'</option>').join("");
+    f.elements.slot.disabled=!slotRows.length;
+    info.textContent=slotRows.length?"Время показано в часовом поясе филиала: "+location.timezone:"На выбранную дату свободных окон нет.";
+    syncSubmit();
   };
   const loadStaff=async({resetDay=false}={})=>{
     const location=currentLocation(),prev=f.elements.staff.value,info=document.querySelector("#quickBookInfo"),submit=document.querySelector("#quickBookSubmit");
@@ -249,43 +271,72 @@ async function renderQuickBooking(){
     document.querySelector("#quickSlotField")?.classList.toggle("hidden",manual);
     document.querySelector("#quickManualField")?.classList.toggle("hidden",!manual);
     document.querySelectorAll("[data-quick-mode]").forEach(b=>b.classList.toggle("active",b.dataset.quickMode===quickMode));
-    const submit=document.querySelector("#quickBookSubmit");
     if(manual){
       f.elements.slot.disabled=true;
-      submit.disabled=!f.elements.staff.value||!f.elements.manual_time.value;
       updateManualHint();
       document.querySelector("#quickBookInfo").textContent="Ручное время проверяется по рабочим часам, исключениям и пересечениям при создании записи.";
+      syncSubmit();
     }else{
       f.elements.slot.disabled=false;
       loadSlots();
     }
   };
+
+  document.querySelector("#quickAddClientBtn")?.addEventListener("click",()=>showNewClient(true));
+  f.elements.customer.addEventListener("change",()=>{
+    const creating=f.elements.customer.value==="__new__";
+    showNewClient(creating);
+    if(!creating)syncSubmit();
+  });
+  document.querySelector("#quickCancelClient")?.addEventListener("click",()=>showNewClient(false));
+  document.querySelector("#quickSaveClient")?.addEventListener("click",async e=>{
+    const btn=e.currentTarget,msg=document.querySelector("#quickClientMsg"),name=String(document.querySelector("#quickClientName")?.value||"").trim(),phone=String(document.querySelector("#quickClientPhone")?.value||"").trim(),email=String(document.querySelector("#quickClientEmail")?.value||"").trim();
+    if(!name||!phone){msg.textContent="Укажите имя и телефон.";return}
+    const normalize=v=>String(v||"").replace(/\D/g,"");
+    const existing=cust.find(x=>normalize(x.phone)===normalize(phone));
+    if(existing){
+      f.elements.customer.value=existing.id;showNewClient(false);toast("Клиент с таким телефоном уже есть");syncSubmit();return
+    }
+    const original=btn.innerHTML;btn.disabled=true;btn.textContent="Добавляем…";msg.textContent="";
+    const {data,error}=await sb.from("customers").insert({organization_id:o.id,name,phone,email:email||null,note:null}).select("*").single();
+    if(error){msg.textContent=friendlyError(error);btn.disabled=false;btn.innerHTML=original;return}
+    cust.push(data);
+    const option=document.createElement("option");option.value=data.id;option.textContent=data.name+" · "+data.phone;
+    const addOption=f.elements.customer.querySelector('option[value="__new__"]');
+    f.elements.customer.insertBefore(option,addOption);
+    f.elements.customer.value=data.id;
+    document.querySelector("#quickClientName").value="";document.querySelector("#quickClientPhone").value="";document.querySelector("#quickClientEmail").value="";
+    btn.disabled=false;btn.innerHTML=original;showNewClient(false);toast("Клиент добавлен");syncSubmit();
+  });
+
   document.querySelectorAll("[data-quick-mode]").forEach(b=>b.addEventListener("click",()=>{quickMode=b.dataset.quickMode;syncQuickMode()}));
   setDayForLocation();
   f.elements.location.addEventListener("change",()=>loadStaff({resetDay:true}));
   f.elements.service.addEventListener("change",()=>loadStaff());
   f.elements.staff.addEventListener("change",()=>{if(quickMode==="slots")loadSlots();else syncQuickMode()});
   f.elements.day.addEventListener("change",()=>{if(quickMode==="slots")loadSlots()});
-  f.elements.manual_time.addEventListener("input",()=>{updateManualHint();syncQuickMode()});
+  f.elements.slot.addEventListener("change",syncSubmit);
+  f.elements.manual_time.addEventListener("input",()=>{updateManualHint();syncSubmit()});
+  if(!cust.length)showNewClient(true);
   await loadStaff({resetDay:true});
   syncQuickMode();
 
   f.addEventListener("submit",async e=>{
     e.preventDefault();
     const fd=new FormData(f),btn=document.querySelector("#quickBookSubmit");
+    if(!fd.get("customer")||fd.get("customer")==="__new__")return toast("Выберите или добавьте клиента","error");
     if(!fd.get("staff"))return toast("Выберите сотрудника","error");
     if(quickMode==="slots"&&!fd.get("slot"))return toast("Выберите свободное время","error");
     if(quickMode==="manual"&&!fd.get("manual_time"))return toast("Укажите время начала","error");
-    btn.disabled=true;btn.textContent="Создаём…";
+    const original=btn.innerHTML;btn.disabled=true;btn.textContent="Создаём…";
     const request=quickMode==="manual"
       ? sb.rpc("create_admin_booking_local",{p_location_id:fd.get("location"),p_service_id:fd.get("service"),p_staff_id:fd.get("staff"),p_customer_id:fd.get("customer"),p_local_date:fd.get("day"),p_local_time:fd.get("manual_time"),p_note:null,p_booking_key:crypto.randomUUID()})
       : sb.rpc("create_admin_booking",{p_location_id:fd.get("location"),p_service_id:fd.get("service"),p_staff_id:fd.get("staff"),p_customer_id:fd.get("customer"),p_start_at:fd.get("slot"),p_note:null,p_booking_key:crypto.randomUUID()});
     const {error}=await request;
-    if(error){toast(friendlyError(error),"error");btn.disabled=false;btn.textContent="Создать запись"}
+    if(error){toast(friendlyError(error),"error");btn.disabled=false;btn.innerHTML=original;syncSubmit()}
     else{toast("Запись создана");dashboard()}
   });
 }
-
 async function catalog(){
   if(!await requireAuth())return;
   const p=await profile(),manager=["owner","admin"].includes(p.role);
