@@ -564,3 +564,112 @@ select:disabled,input:disabled,textarea:disabled{background:#f4f5f7!important;bo
   .appointments-scope button{flex:1}
   .premium-search,.filter-select{width:100%!important}
 }
+
+
+/* Dashboard header centering + past period filter */
+/* Header action buttons: exact visual centering for text and icon. */
+.dashboard-page-head>.cluster{
+  display:flex!important;
+  align-items:center!important;
+  gap:8px!important;
+}
+.dashboard-page-head>.cluster .btn{
+  height:42px!important;
+  min-height:42px!important;
+  padding:0 14px!important;
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  gap:8px!important;
+  line-height:1!important;
+  vertical-align:middle!important;
+}
+.dashboard-page-head>.cluster .btn,
+.dashboard-page-head>.cluster .btn *{
+  line-height:1!important;
+}
+.dashboard-page-head>.cluster .btn .ui-icon{
+  display:block!important;
+  flex:0 0 auto!important;
+  width:16px!important;
+  height:16px!important;
+}
+#focusNewBooking{
+  min-width:136px!important;
+}
+.dashboard-page-head>.cluster>a.btn.secondary{
+  min-width:156px!important;
+}
+
+/* Past appointment period control */
+.appointments-period{
+  display:flex;
+  align-items:center;
+  gap:7px;
+  flex:0 0 auto;
+}
+.appointments-period>select{
+  width:126px!important;
+  min-height:39px!important;
+  height:39px!important;
+  font-size:11px!important;
+  padding-top:0!important;
+  padding-bottom:0!important;
+}
+.appointments-custom-period{
+  display:flex;
+  align-items:center;
+  gap:5px;
+}
+.appointments-custom-period input{
+  width:132px!important;
+  min-height:39px!important;
+  height:39px!important;
+  padding-top:0!important;
+  padding-bottom:0!important;
+  font-size:11px!important;
+}
+.appointments-custom-period>span{
+  color:#98a1af;
+  font-size:11px;
+}
+@media(max-width:1320px){
+  .appointments-period{
+    order:2;
+  }
+  .premium-search{
+    order:3;
+  }
+  .filter-select{
+    order:4;
+  }
+}
+@media(max-width:900px){
+  .appointments-period{
+    width:100%;
+    flex-wrap:wrap;
+  }
+  .appointments-period>select{
+    width:150px!important;
+  }
+}
+@media(max-width:600px){
+  .dashboard-page-head>.cluster{
+    width:100%!important;
+  }
+  .dashboard-page-head>.cluster .btn{
+    flex:1 1 0!important;
+    min-width:0!important;
+  }
+  .appointments-period>select{
+    width:100%!important;
+  }
+  .appointments-custom-period{
+    width:100%;
+  }
+  .appointments-custom-period input{
+    flex:1 1 0;
+    width:auto!important;
+    min-width:0;
+  }
+}
