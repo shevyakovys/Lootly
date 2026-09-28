@@ -177,7 +177,7 @@ select:disabled,input:disabled,textarea:disabled{background:#f4f5f7!important;bo
 .notice.info{background:#f2f6fd!important;color:#48628d!important;border-color:#dce6f8!important}
 .notice.success{background:var(--ui-success-soft)!important;color:#2a765e!important;border-color:#d9eee7!important}
 .notice.error{background:var(--ui-danger-soft)!important;color:#a94c4c!important;border-color:#efd8d8!important}
-.onboarding{background:#1b2740!important;box-shadow:none!important}.onboarding p{color:#b5c0d1!important}
+.onboarding{background:#1b2740!important;box-shadow:none!important}.onboarding p{color:#b5c0d1!important}.onboarding-progress{font-size:30px!important;line-height:1!important;font-weight:700!important;letter-spacing:-.02em;color:#fff}
 
 .booking-shell,.auth-wrap,.auth-panel{background:var(--ui-bg)!important}
 .booking-card,.auth-card{border-color:var(--ui-line)!important;border-radius:14px!important}
