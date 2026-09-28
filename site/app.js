@@ -115,11 +115,11 @@ function join(token){
 
 async function dashboard(){
   if(!await requireAuth())return;
-  const p=await profile(),o=await org();
-  const lookback=new Date(Date.now()-36*60*60*1000);
-  const [aRes,apptRes,locRes,svcRes,staffRes,hoursRes,widgetRes,waitRes]=await Promise.all([
+  const p=await profile(),o=await org(),now=new Date();
+  const [aRes,futureRes,pastRes,locRes,svcRes,staffRes,hoursRes,widgetRes,waitRes]=await Promise.all([
     sb.rpc("get_admin_analytics"),
-    sb.from("appointments").select("*,customers(name,phone),services(name),staff_members(name),locations(name,timezone)").gte("start_at",lookback.toISOString()).order("start_at",{ascending:true}).limit(250),
+    sb.from("appointments").select("*,customers(name,phone),services(name),staff_members(name),locations(name,timezone)").gte("start_at",now.toISOString()).order("start_at",{ascending:true}).limit(250),
+    sb.from("appointments").select("*,customers(name,phone),services(name),staff_members(name),locations(name,timezone)").lt("start_at",now.toISOString()).order("start_at",{ascending:false}).limit(250),
     sb.from("locations").select("id,timezone",{count:"exact"}).eq("active",true).order("created_at"),
     sb.from("services").select("id",{count:"exact"}).eq("active",true),
     sb.from("staff_members").select("id",{count:"exact"}).eq("active",true),
@@ -127,11 +127,11 @@ async function dashboard(){
     sb.from("booking_widgets").select("id",{count:"exact"}).eq("active",true),
     sb.from("waitlist_entries").select("*,services(name),staff_members(name),locations(name)").eq("status","waiting").order("desired_date",{ascending:true}).limit(30)
   ]);
-  if(aRes.error||apptRes.error){await shell("dashboard","Журнал",'<div class="notice error">'+esc((aRes.error||apptRes.error).message)+'</div>');return}
-  const metrics=aRes.data||{},all=apptRes.data||[],now=new Date(),defaultTz=locRes.data?.[0]?.timezone||Intl.DateTimeFormat().resolvedOptions().timeZone;
+  if(aRes.error||futureRes.error||pastRes.error){await shell("dashboard","Журнал",'<div class="notice error">'+esc((aRes.error||futureRes.error||pastRes.error).message)+'</div>');return}
+  const upcoming=futureRes.data||[],past=pastRes.data||[],all=[...past,...upcoming],metrics=aRes.data||{},defaultTz=locRes.data?.[0]?.timezone||Intl.DateTimeFormat().resolvedOptions().timeZone;
   const currentDateFor=tz=>localDateParts(now,tz||defaultTz).date;
   const today=all.filter(x=>{const tz=x.locations?.timezone||defaultTz;return localDateParts(x.start_at,tz).date===currentDateFor(tz)});
-  const upcoming=all.filter(x=>new Date(x.start_at)>=now).slice(0,30),waitlist=waitRes.data||[];
+  const waitlist=waitRes.data||[];
   const checklist=[
     [locRes.count>0,"Добавьте филиал","#/catalog"],
     [svcRes.count>0,"Создайте услуги","#/catalog"],
@@ -140,17 +140,33 @@ async function dashboard(){
     [widgetRes.count>0,"Создайте виджет","#/widgets"]
   ],done=checklist.filter(x=>x[0]).length;
   const onboarding=done<checklist.length?'<section class="card onboarding"><div class="spread"><div><h2>Настройка '+done+'/'+checklist.length+'</h2><p>Ещё немного — и клиенты смогут записываться сами.</p></div><span class="onboarding-progress">'+Math.round(done/checklist.length*100)+'%</span></div><div class="checklist">'+checklist.map(x=>'<a href="'+x[2]+'" class="checkitem '+(x[0]?"done":"")+'"><span class="checkdot">'+(x[0]?icon("check"):'<span class="check-pending"></span>')+'</span><span>'+esc(x[1])+'</span></a>').join("")+'</div></section>':"";
-  const rows=upcoming.map(x=>appointmentRow(x)).join("");
+  const rows=upcoming.slice(0,30).map(x=>appointmentRow(x)).join("");
   const content='<div class="page-head dashboard-page-head"><div><span class="eyebrow">Рабочее пространство</span><h1>Обзор</h1><p>'+esc(o.name)+' · '+new Intl.DateTimeFormat("ru-RU",{timeZone:defaultTz,weekday:"long",day:"numeric",month:"long"}).format(now)+'</p></div><div class="cluster"><a class="btn secondary" href="#/widgets">Поделиться записью</a><button class="btn brand" id="focusNewBooking">'+icon("plus")+'<span>Новая запись</span></button></div></div>'+
   onboarding+'<section class="dashboard-metrics" style="margin-top:18px"><div class="metric-card metric-blue"><div class="metric-top"><div><div class="metric-label">Записи сегодня</div><div class="metric-value">'+today.length+'</div></div><span class="metric-icon">'+icon("calendar")+'</span></div><div class="metric-foot"><span>Текущий день</span><b>Журнал</b></div></div><div class="metric-card metric-cyan"><div class="metric-top"><div><div class="metric-label">Онлайн-записи</div><div class="metric-value">'+(metrics.public_bookings||0)+'</div></div><span class="metric-icon">'+icon("widgets")+'</span></div><div class="metric-foot"><span>За период</span><b>Клиенты</b></div></div><div class="metric-card metric-orange"><div class="metric-top"><div><div class="metric-label">Отмены</div><div class="metric-value">'+Math.round(Number(metrics.cancellation_rate||0)*100)+'%</div></div><span class="metric-icon">'+icon("close")+'</span></div><div class="metric-foot"><span>Доля отмен</span><b>Контроль</b></div></div><div class="metric-card metric-green"><div class="metric-top"><div><div class="metric-label">Повторные клиенты</div><div class="metric-value">'+Math.round(Number(metrics.repeat_customer_rate||0)*100)+'%</div></div><span class="metric-icon">'+icon("client")+'</span></div><div class="metric-foot"><span>Вернулись снова</span><b>Лояльность</b></div></div></section>'+
   '<section class="dashboard-shortcuts" style="margin-top:18px"><a href="#/calendar"><span class="shortcut-icon">'+icon("calendar")+'</span><div><span>Планирование</span><b>Открыть календарь</b></div>'+icon("arrowRight","shortcut-arrow")+'</a><a href="#/schedule"><span class="shortcut-icon">'+icon("staff")+'</span><div><span>Команда</span><b>Настроить график</b></div>'+icon("arrowRight","shortcut-arrow")+'</a><a href="#/widgets"><span class="shortcut-icon">'+icon("widgets")+'</span><div><span>Клиентский канал</span><b>Онлайн-запись</b></div>'+icon("arrowRight","shortcut-arrow")+'</a><a href="#/settings"><span class="shortcut-icon">'+icon("settings")+'</span><div><span>Система</span><b>Настройки</b></div>'+icon("arrowRight","shortcut-arrow")+'</a></section>'+
   (waitlist.length?'<section class="card" style="margin-top:18px"><div class="card-title"><div><h2>Лист ожидания</h2><p class="muted tiny">Клиенты, которые не нашли подходящее время</p></div><span class="status booked">'+waitlist.length+' ожидают</span></div><div id="waitlistRows">'+waitlist.map(x=>'<div class="spread" style="padding:12px 0;border-bottom:1px solid var(--line)"><div><b>'+esc(x.customer_name)+'</b><div class="muted tiny">'+esc(x.customer_phone)+' · '+esc(x.services?.name||"")+' · '+new Date(x.desired_date+"T12:00:00").toLocaleDateString("ru-RU")+'</div></div><div class="cluster"><button class="btn secondary sm" data-wait="'+x.id+'" data-wait-status="contacted">Связались</button><button class="btn ghost sm" data-wait="'+x.id+'" data-wait-status="canceled">Снять</button></div></div>').join("")+'</div></section>':"")+
   (["owner","admin"].includes(p.role)?'<section id="newBooking" style="margin-top:18px"></section>':"")+
-  '<section class="card flush appointments-panel" style="margin-top:18px"><div class="card-title appointments-head"><div><h2>Ближайшие записи</h2><p class="muted tiny">Показываем будущие визиты</p></div><div class="cluster appointments-filters"><div class="search premium-search"><input id="apptSearch" placeholder="Клиент, телефон, филиал, услуга, сотрудник"></div><select id="apptStatus" class="filter-select"><option value="">Все статусы</option><option value="booked">Новые</option><option value="confirmed">Подтверждённые</option><option value="completed">Завершённые</option><option value="canceled">Отменённые</option></select></div></div><div class="table-wrap"><table class="table appointments-table"><thead><tr><th>Время</th><th>Филиал</th><th>Клиент</th><th>Телефон</th><th>Услуга</th><th>Сотрудник</th><th>Статус</th><th></th></tr></thead><tbody id="apptRows">'+(rows||'<tr><td colspan="8">'+emptyState("Пока нет записей","Создайте первую запись или опубликуйте онлайн-виджет.")+'</td></tr>')+'</tbody></table></div></section>';
+  '<section class="card flush appointments-panel" style="margin-top:18px"><div class="card-title appointments-head"><div><h2>Записи</h2><p class="muted tiny" id="apptScopeHint">Ближайшие визиты</p></div><div class="cluster appointments-filters"><div class="appointments-scope" role="group" aria-label="Период записей"><button type="button" class="active" data-appt-scope="upcoming">Ближайшие</button><button type="button" data-appt-scope="past">Прошедшие</button></div><div class="search premium-search"><input id="apptSearch" placeholder="Клиент, телефон, филиал, услуга, сотрудник"></div><select id="apptStatus" class="filter-select"><option value="">Все статусы</option><option value="booked">Новые</option><option value="confirmed">Подтверждённые</option><option value="completed">Завершённые</option><option value="canceled">Отменённые</option></select></div></div><div class="table-wrap"><table class="table appointments-table"><thead><tr><th>Время</th><th>Филиал</th><th>Клиент</th><th>Телефон</th><th>Услуга</th><th>Сотрудник</th><th>Статус</th><th></th></tr></thead><tbody id="apptRows">'+(rows||'<tr><td colspan="8">'+emptyState("Пока нет ближайших записей","Создайте запись или переключитесь на прошедшие.")+'</td></tr>')+'</tbody></table></div></section>';
   await shell("dashboard","Журнал",content);
   bindAppointmentActions();
-  const renderFilter=()=>{const q=(document.querySelector("#apptSearch")?.value||"").toLowerCase(),st=document.querySelector("#apptStatus")?.value||"";const filtered=upcoming.filter(x=>{const hay=[x.customers?.name,x.customers?.phone,x.locations?.name,x.services?.name,x.staff_members?.name].join(" ").toLowerCase();return(!q||hay.includes(q))&&(!st||x.status===st)});document.querySelector("#apptRows").innerHTML=filtered.length?filtered.map(appointmentRow).join(""):'<tr><td colspan="8">'+emptyState("Ничего не найдено","Измените поиск или фильтр.")+'</td></tr>';bindAppointmentActions()};
-  document.querySelector("#apptSearch")?.addEventListener("input",renderFilter);document.querySelector("#apptStatus")?.addEventListener("change",renderFilter);
+  let appointmentScope="upcoming";
+  const renderFilter=()=>{
+    const q=(document.querySelector("#apptSearch")?.value||"").toLowerCase(),st=document.querySelector("#apptStatus")?.value||"";
+    const source=appointmentScope==="past"?past:upcoming;
+    const filtered=source.filter(x=>{const hay=[x.customers?.name,x.customers?.phone,x.locations?.name,x.services?.name,x.staff_members?.name].join(" ").toLowerCase();return(!q||hay.includes(q))&&(!st||x.status===st)}).slice(0,50);
+    const emptyTitle=appointmentScope==="past"?"Прошедших записей нет":"Ближайших записей нет";
+    const emptyText=q||st?"Измените поиск или фильтр.":appointmentScope==="past"?"Завершённые и прошлые визиты появятся здесь.":"Создайте новую запись — она появится здесь.";
+    document.querySelector("#apptRows").innerHTML=filtered.length?filtered.map(appointmentRow).join(""):'<tr><td colspan="8">'+emptyState(emptyTitle,emptyText)+'</td></tr>';
+    const hint=document.querySelector("#apptScopeHint");if(hint)hint.textContent=appointmentScope==="past"?"Сначала самые недавние прошедшие визиты":"Сначала ближайшие будущие визиты";
+    bindAppointmentActions()
+  };
+  document.querySelector("#apptSearch")?.addEventListener("input",renderFilter);
+  document.querySelector("#apptStatus")?.addEventListener("change",renderFilter);
+  document.querySelectorAll("[data-appt-scope]").forEach(b=>b.addEventListener("click",()=>{
+    appointmentScope=b.dataset.apptScope;
+    document.querySelectorAll("[data-appt-scope]").forEach(x=>x.classList.toggle("active",x===b));
+    renderFilter();
+  }));
   document.querySelectorAll("[data-wait]").forEach(b=>b.addEventListener("click",async()=>{const {error}=await sb.from("waitlist_entries").update({status:b.dataset.waitStatus,updated_at:new Date().toISOString()}).eq("id",b.dataset.wait);if(error)toast(error.message,"error");else{toast("Лист ожидания обновлён");dashboard()}}));
   if(["owner","admin"].includes(p.role)){await renderQuickBooking();document.querySelector("#focusNewBooking")?.addEventListener("click",()=>document.querySelector("#newBooking")?.scrollIntoView({behavior:"smooth"}))}
 }
