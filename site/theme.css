@@ -404,3 +404,163 @@ select:disabled,input:disabled,textarea:disabled{background:#f4f5f7!important;bo
   }
   .auth-card h1{font-size:24px!important}
 }
+
+
+/* Dashboard booking UX fixes */
+/* Keep date/time fields top-aligned in both slot and exact-time modes. */
+.booking-time-fields{
+  align-items:start!important;
+}
+.booking-time-fields>.field{
+  align-self:start!important;
+  margin:0!important;
+}
+.booking-time-fields>.field>span{
+  min-height:18px!important;
+}
+.booking-time-fields input,
+.booking-time-fields select{
+  margin:0!important;
+}
+
+/* Quick booking customer picker */
+.client-select-row{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 42px;
+  gap:8px;
+  align-items:stretch;
+}
+.client-select-row select{min-width:0}
+.client-add-trigger{
+  width:42px!important;
+  min-width:42px!important;
+  height:42px!important;
+  min-height:42px!important;
+  padding:0!important;
+  display:grid!important;
+  place-items:center!important;
+}
+.client-add-trigger .ui-icon{width:17px!important;height:17px!important}
+.quick-new-client{
+  padding:14px;
+  border:1px solid #dfe5ef;
+  border-radius:10px;
+  background:#f8faff;
+}
+.quick-new-client-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:13px;
+}
+.quick-new-client-head b{
+  display:block;
+  color:#263248;
+  font-size:12px;
+  font-weight:600;
+}
+.quick-new-client-head span{
+  display:block;
+  margin-top:3px;
+  color:#7b8697;
+  font-size:10px;
+}
+.quick-new-client-head .btn{
+  width:32px!important;
+  height:32px!important;
+  min-height:32px!important;
+  padding:0!important;
+}
+.quick-new-client-actions{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-top:12px;
+}
+.quick-new-client-actions .btn{min-height:38px!important}
+
+/* No legacy inset highlight/white stripe on the quick-booking CTA. */
+#quickBookSubmit,
+#quickBookSubmit:hover,
+#quickBookSubmit:focus,
+#quickBookSubmit:disabled{
+  box-shadow:none!important;
+  background-image:none!important;
+  overflow:hidden;
+}
+#quickBookSubmit:before,
+#quickBookSubmit:after{
+  content:none!important;
+  display:none!important;
+}
+#quickBookSubmit .btn-plus{
+  width:24px!important;
+  height:24px!important;
+  border-radius:50%!important;
+  background:rgba(255,255,255,.15)!important;
+  color:#fff!important;
+}
+#quickBookSubmit:disabled .btn-plus{
+  background:rgba(255,255,255,.38)!important;
+  color:#929cab!important;
+}
+
+/* Upcoming / past appointments switch */
+.appointments-scope{
+  display:inline-flex;
+  flex:0 0 auto;
+  gap:2px;
+  padding:3px;
+  border:1px solid #e4e7ec;
+  border-radius:9px;
+  background:#f0f2f5;
+}
+.appointments-scope button{
+  min-height:33px;
+  padding:6px 10px;
+  border:0;
+  border-radius:7px;
+  background:transparent;
+  color:#737e90;
+  font:500 11px/1.2 inherit;
+  cursor:pointer;
+}
+.appointments-scope button:hover{color:#3d485d}
+.appointments-scope button.active{
+  background:#fff;
+  color:#263248;
+  box-shadow:0 1px 3px rgba(16,24,40,.065);
+}
+.appointments-scope button:focus-visible{
+  outline:3px solid rgba(53,104,212,.14);
+  outline-offset:1px;
+}
+.appointments-filters{
+  align-items:center!important;
+  gap:8px!important;
+}
+
+@media(max-width:1180px){
+  .appointments-head{
+    align-items:flex-start!important;
+  }
+  .appointments-filters{
+    width:100%!important;
+    flex-wrap:wrap!important;
+  }
+  .appointments-scope{order:1}
+  .premium-search{order:2;flex:1 1 280px!important;width:auto!important}
+  .filter-select{order:3}
+}
+@media(max-width:760px){
+  .booking-time-fields{grid-template-columns:1fr!important}
+  .client-select-row{grid-template-columns:minmax(0,1fr) 42px}
+  .quick-new-client .grid-3{grid-template-columns:1fr!important}
+  .quick-new-client-actions{align-items:flex-start;flex-direction:column}
+  .quick-new-client-actions .btn{width:100%}
+  .appointments-filters{align-items:stretch!important}
+  .appointments-scope{width:100%}
+  .appointments-scope button{flex:1}
+  .premium-search,.filter-select{width:100%!important}
+}
