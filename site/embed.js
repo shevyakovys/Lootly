@@ -56,7 +56,7 @@
   };
 
   const mountFallback=(message)=>{
-    const button=document.createElement("button");button.className="launcher";button.textContent="Онлайн-запись";button.style.background="#206bc4";positionButton(button,"bottom-right");
+    const button=document.createElement("button");button.className="launcher";button.textContent="Онлайн-запись";button.style.background="#3568d4";positionButton(button,"bottom-right");
     button.addEventListener("click",()=>window.open(WEB_URL+encodeURIComponent(key),"_blank","noopener"));
     shadow.append(button);
     emit("lootly:error",{stage:"init",message});
@@ -64,7 +64,7 @@
 
   const mount=(data)=>{
     const cfg=data.widget||{};
-    const button=document.createElement("button");button.className="launcher";button.type="button";button.textContent=cfg.button_text||"Записаться";button.style.background=cfg.primary_color||"#206bc4";positionButton(button,cfg.button_position||"bottom-right");if(cfg.button_animation)button.style.animation="pulse 2.5s ease-in-out infinite";button.setAttribute("aria-haspopup","dialog");button.setAttribute("aria-expanded","false");shadow.append(button);
+    const button=document.createElement("button");button.className="launcher";button.type="button";button.textContent=cfg.button_text||"Записаться";button.style.background=cfg.primary_color||"#3568d4";positionButton(button,cfg.button_position||"bottom-right");if(cfg.button_animation)button.style.animation="pulse 2.5s ease-in-out infinite";button.setAttribute("aria-haspopup","dialog");button.setAttribute("aria-expanded","false");shadow.append(button);
 
     let overlay=null,oldOverflow="",iframe=null,lastFocused=null;
     const close=()=>{
