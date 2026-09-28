@@ -673,3 +673,66 @@ select:disabled,input:disabled,textarea:disabled{background:#f4f5f7!important;bo
     min-width:0;
   }
 }
+
+
+/* Exact centering for dashboard header actions */
+.dashboard-head-actions{
+  display:flex!important;
+  align-items:center!important;
+  gap:8px!important;
+}
+.dashboard-action{
+  position:relative!important;
+  height:42px!important;
+  min-height:42px!important;
+  padding:0!important;
+  display:block!important;
+  box-sizing:border-box!important;
+  line-height:1!important;
+  overflow:hidden!important;
+}
+.dashboard-action-share{
+  width:156px!important;
+  min-width:156px!important;
+}
+.dashboard-action-primary{
+  width:136px!important;
+  min-width:136px!important;
+}
+.dashboard-action-label{
+  position:absolute!important;
+  inset:0!important;
+  display:grid!important;
+  place-items:center!important;
+  padding:0!important;
+  margin:0!important;
+  line-height:1!important;
+  white-space:nowrap!important;
+  text-align:center!important;
+  pointer-events:none!important;
+}
+.dashboard-action-icon{
+  position:absolute!important;
+  left:13px!important;
+  top:50%!important;
+  width:16px!important;
+  height:16px!important;
+  margin:0!important;
+  transform:translateY(-50%)!important;
+  pointer-events:none!important;
+}
+.dashboard-action-primary .dashboard-action-label{
+  /* Label remains centered in the full button, not in the space beside the icon. */
+  transform:none!important;
+}
+@media(max-width:600px){
+  .dashboard-head-actions{
+    width:100%!important;
+  }
+  .dashboard-action-share,
+  .dashboard-action-primary{
+    width:auto!important;
+    min-width:0!important;
+    flex:1 1 0!important;
+  }
+}
