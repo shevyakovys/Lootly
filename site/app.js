@@ -119,7 +119,7 @@ async function dashboard(){
   const [aRes,futureRes,pastRes,locRes,svcRes,staffRes,hoursRes,widgetRes,waitRes]=await Promise.all([
     sb.rpc("get_admin_analytics"),
     sb.from("appointments").select("*,customers(name,phone),services(name),staff_members(name),locations(name,timezone)").gte("start_at",now.toISOString()).order("start_at",{ascending:true}).limit(250),
-    sb.from("appointments").select("*,customers(name,phone),services(name),staff_members(name),locations(name,timezone)").lt("start_at",now.toISOString()).order("start_at",{ascending:false}).limit(250),
+    sb.from("appointments").select("*,customers(name,phone),services(name),staff_members(name),locations(name,timezone)").lt("start_at",now.toISOString()).order("start_at",{ascending:false}).limit(1000),
     sb.from("locations").select("id,timezone",{count:"exact"}).eq("active",true).order("created_at"),
     sb.from("services").select("id",{count:"exact"}).eq("active",true),
     sb.from("staff_members").select("id",{count:"exact"}).eq("active",true),
@@ -146,27 +146,54 @@ async function dashboard(){
   '<section class="dashboard-shortcuts" style="margin-top:18px"><a href="#/calendar"><span class="shortcut-icon">'+icon("calendar")+'</span><div><span>Планирование</span><b>Открыть календарь</b></div>'+icon("arrowRight","shortcut-arrow")+'</a><a href="#/schedule"><span class="shortcut-icon">'+icon("staff")+'</span><div><span>Команда</span><b>Настроить график</b></div>'+icon("arrowRight","shortcut-arrow")+'</a><a href="#/widgets"><span class="shortcut-icon">'+icon("widgets")+'</span><div><span>Клиентский канал</span><b>Онлайн-запись</b></div>'+icon("arrowRight","shortcut-arrow")+'</a><a href="#/settings"><span class="shortcut-icon">'+icon("settings")+'</span><div><span>Система</span><b>Настройки</b></div>'+icon("arrowRight","shortcut-arrow")+'</a></section>'+
   (waitlist.length?'<section class="card" style="margin-top:18px"><div class="card-title"><div><h2>Лист ожидания</h2><p class="muted tiny">Клиенты, которые не нашли подходящее время</p></div><span class="status booked">'+waitlist.length+' ожидают</span></div><div id="waitlistRows">'+waitlist.map(x=>'<div class="spread" style="padding:12px 0;border-bottom:1px solid var(--line)"><div><b>'+esc(x.customer_name)+'</b><div class="muted tiny">'+esc(x.customer_phone)+' · '+esc(x.services?.name||"")+' · '+new Date(x.desired_date+"T12:00:00").toLocaleDateString("ru-RU")+'</div></div><div class="cluster"><button class="btn secondary sm" data-wait="'+x.id+'" data-wait-status="contacted">Связались</button><button class="btn ghost sm" data-wait="'+x.id+'" data-wait-status="canceled">Снять</button></div></div>').join("")+'</div></section>':"")+
   (["owner","admin"].includes(p.role)?'<section id="newBooking" style="margin-top:18px"></section>':"")+
-  '<section class="card flush appointments-panel" style="margin-top:18px"><div class="card-title appointments-head"><div><h2>Записи</h2><p class="muted tiny" id="apptScopeHint">Ближайшие визиты</p></div><div class="cluster appointments-filters"><div class="appointments-scope" role="group" aria-label="Период записей"><button type="button" class="active" data-appt-scope="upcoming">Ближайшие</button><button type="button" data-appt-scope="past">Прошедшие</button></div><div class="search premium-search"><input id="apptSearch" placeholder="Клиент, телефон, филиал, услуга, сотрудник"></div><select id="apptStatus" class="filter-select"><option value="">Все статусы</option><option value="booked">Новые</option><option value="confirmed">Подтверждённые</option><option value="completed">Завершённые</option><option value="canceled">Отменённые</option></select></div></div><div class="table-wrap"><table class="table appointments-table"><thead><tr><th>Время</th><th>Филиал</th><th>Клиент</th><th>Телефон</th><th>Услуга</th><th>Сотрудник</th><th>Статус</th><th></th></tr></thead><tbody id="apptRows">'+(rows||'<tr><td colspan="8">'+emptyState("Пока нет ближайших записей","Создайте запись или переключитесь на прошедшие.")+'</td></tr>')+'</tbody></table></div></section>';
+  '<section class="card flush appointments-panel" style="margin-top:18px"><div class="card-title appointments-head"><div><h2>Записи</h2><p class="muted tiny" id="apptScopeHint">Ближайшие визиты</p></div><div class="cluster appointments-filters"><div class="appointments-scope" role="group" aria-label="Период записей"><button type="button" class="active" data-appt-scope="upcoming">Ближайшие</button><button type="button" data-appt-scope="past">Прошедшие</button></div><div class="appointments-period hidden" id="apptPeriodWrap"><select id="apptPeriod" aria-label="Период прошедших записей"><option value="7">7 дней</option><option value="30" selected>30 дней</option><option value="90">3 месяца</option><option value="365">1 год</option><option value="custom">Свой период</option></select><div class="appointments-custom-period hidden" id="apptCustomPeriod"><input type="date" id="apptDateFrom" aria-label="Дата с"><span>—</span><input type="date" id="apptDateTo" aria-label="Дата по"></div></div><div class="search premium-search"><input id="apptSearch" placeholder="Клиент, телефон, филиал, услуга, сотрудник"></div><select id="apptStatus" class="filter-select"><option value="">Все статусы</option><option value="booked">Новые</option><option value="confirmed">Подтверждённые</option><option value="completed">Завершённые</option><option value="canceled">Отменённые</option></select></div></div><div class="table-wrap"><table class="table appointments-table"><thead><tr><th>Время</th><th>Филиал</th><th>Клиент</th><th>Телефон</th><th>Услуга</th><th>Сотрудник</th><th>Статус</th><th></th></tr></thead><tbody id="apptRows">'+(rows||'<tr><td colspan="8">'+emptyState("Пока нет ближайших записей","Создайте запись или переключитесь на прошедшие.")+'</td></tr>')+'</tbody></table></div></section>';
   await shell("dashboard","Журнал",content);
   bindAppointmentActions();
   let appointmentScope="upcoming";
+  const localDateValue=d=>{const x=new Date(d);return x.getFullYear()+"-"+String(x.getMonth()+1).padStart(2,"0")+"-"+String(x.getDate()).padStart(2,"0")};
+  const defaultPastFrom=new Date(now);defaultPastFrom.setDate(defaultPastFrom.getDate()-30);
+  const dateFrom=document.querySelector("#apptDateFrom"),dateTo=document.querySelector("#apptDateTo");
+  if(dateFrom)dateFrom.value=localDateValue(defaultPastFrom);
+  if(dateTo)dateTo.value=localDateValue(now);
+  const pastPeriodMatch=x=>{
+    if(appointmentScope!=="past")return true;
+    const period=document.querySelector("#apptPeriod")?.value||"30",time=new Date(x.start_at).getTime();
+    if(period==="custom"){
+      const from=document.querySelector("#apptDateFrom")?.value,to=document.querySelector("#apptDateTo")?.value;
+      const start=from?new Date(from+"T00:00:00").getTime():-Infinity;
+      const end=to?new Date(to+"T23:59:59.999").getTime():now.getTime();
+      return time>=start&&time<=end;
+    }
+    const days=Math.max(1,Number(period||30)),start=now.getTime()-days*86400000;
+    return time>=start&&time<=now.getTime();
+  };
+  const syncPeriodUi=()=>{
+    const pastMode=appointmentScope==="past",wrap=document.querySelector("#apptPeriodWrap"),custom=document.querySelector("#apptCustomPeriod"),period=document.querySelector("#apptPeriod")?.value;
+    wrap?.classList.toggle("hidden",!pastMode);
+    custom?.classList.toggle("hidden",!pastMode||period!=="custom");
+  };
   const renderFilter=()=>{
     const q=(document.querySelector("#apptSearch")?.value||"").toLowerCase(),st=document.querySelector("#apptStatus")?.value||"";
     const source=appointmentScope==="past"?past:upcoming;
-    const filtered=source.filter(x=>{const hay=[x.customers?.name,x.customers?.phone,x.locations?.name,x.services?.name,x.staff_members?.name].join(" ").toLowerCase();return(!q||hay.includes(q))&&(!st||x.status===st)}).slice(0,50);
+    const filtered=source.filter(x=>{const hay=[x.customers?.name,x.customers?.phone,x.locations?.name,x.services?.name,x.staff_members?.name].join(" ").toLowerCase();return pastPeriodMatch(x)&&(!q||hay.includes(q))&&(!st||x.status===st)}).slice(0,100);
     const emptyTitle=appointmentScope==="past"?"Прошедших записей нет":"Ближайших записей нет";
-    const emptyText=q||st?"Измените поиск или фильтр.":appointmentScope==="past"?"Завершённые и прошлые визиты появятся здесь.":"Создайте новую запись — она появится здесь.";
+    const emptyText=q||st?"Измените поиск или фильтр.":appointmentScope==="past"?"В выбранном периоде записей нет.":"Создайте новую запись — она появится здесь.";
     document.querySelector("#apptRows").innerHTML=filtered.length?filtered.map(appointmentRow).join(""):'<tr><td colspan="8">'+emptyState(emptyTitle,emptyText)+'</td></tr>';
-    const hint=document.querySelector("#apptScopeHint");if(hint)hint.textContent=appointmentScope==="past"?"Сначала самые недавние прошедшие визиты":"Сначала ближайшие будущие визиты";
+    const hint=document.querySelector("#apptScopeHint");if(hint)hint.textContent=appointmentScope==="past"?"Сначала самые недавние записи за выбранный период":"Сначала ближайшие будущие визиты";
     bindAppointmentActions()
   };
   document.querySelector("#apptSearch")?.addEventListener("input",renderFilter);
   document.querySelector("#apptStatus")?.addEventListener("change",renderFilter);
+  document.querySelector("#apptPeriod")?.addEventListener("change",()=>{syncPeriodUi();renderFilter()});
+  document.querySelector("#apptDateFrom")?.addEventListener("change",renderFilter);
+  document.querySelector("#apptDateTo")?.addEventListener("change",renderFilter);
   document.querySelectorAll("[data-appt-scope]").forEach(b=>b.addEventListener("click",()=>{
     appointmentScope=b.dataset.apptScope;
     document.querySelectorAll("[data-appt-scope]").forEach(x=>x.classList.toggle("active",x===b));
+    syncPeriodUi();
     renderFilter();
   }));
+  syncPeriodUi();
   document.querySelectorAll("[data-wait]").forEach(b=>b.addEventListener("click",async()=>{const {error}=await sb.from("waitlist_entries").update({status:b.dataset.waitStatus,updated_at:new Date().toISOString()}).eq("id",b.dataset.wait);if(error)toast(error.message,"error");else{toast("Лист ожидания обновлён");dashboard()}}));
   if(["owner","admin"].includes(p.role)){await renderQuickBooking();document.querySelector("#focusNewBooking")?.addEventListener("click",()=>document.querySelector("#newBooking")?.scrollIntoView({behavior:"smooth"}))}
 }
