@@ -696,8 +696,8 @@ select:disabled,input:disabled,textarea:disabled{background:#f4f5f7!important;bo
   min-width:156px!important;
 }
 .dashboard-action-primary{
-  width:136px!important;
-  min-width:136px!important;
+  width:160px!important;
+  min-width:160px!important;
 }
 .dashboard-action-label{
   position:absolute!important;
@@ -711,15 +711,35 @@ select:disabled,input:disabled,textarea:disabled{background:#f4f5f7!important;bo
   text-align:center!important;
   pointer-events:none!important;
 }
-.dashboard-action-icon{
+.dashboard-action-icon{display:none!important}
+.dashboard-action-plus{
   position:absolute!important;
-  left:13px!important;
+  left:14px!important;
   top:50%!important;
-  width:16px!important;
-  height:16px!important;
+  width:18px!important;
+  height:18px!important;
   margin:0!important;
   transform:translateY(-50%)!important;
   pointer-events:none!important;
+}
+.dashboard-action-plus:before,
+.dashboard-action-plus:after{
+  content:""!important;
+  position:absolute!important;
+  left:50%!important;
+  top:50%!important;
+  display:block!important;
+  border-radius:999px!important;
+  background:currentColor!important;
+  transform:translate(-50%,-50%)!important;
+}
+.dashboard-action-plus:before{
+  width:12px!important;
+  height:1.5px!important;
+}
+.dashboard-action-plus:after{
+  width:1.5px!important;
+  height:12px!important;
 }
 .dashboard-action-primary .dashboard-action-label{
   /* Label remains centered in the full button, not in the space beside the icon. */
